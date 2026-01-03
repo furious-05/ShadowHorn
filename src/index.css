@@ -1,0 +1,164 @@
+@import "tailwindcss";
+
+/* Theme variables (dark defaults) */
+:root {
+	--accent-1: #7c3aed; /* purple */
+	--accent-2: #ec4899; /* pink */
+	--progress-track-bg: rgba(255,255,255,0.06);
+	--progress-fill: linear-gradient(90deg, var(--accent-2), var(--accent-1));
+	--progress-percent-color: #9fb0cc;
+}
+
+/* Custom themed scrollbars */
+/* WebKit browsers (Chrome, Edge, Safari) */
+::-webkit-scrollbar {
+	width: 12px;
+	height: 12px;
+}
+::-webkit-scrollbar-track {
+	background: transparent; /* keep subtle */
+}
+::-webkit-scrollbar-thumb {
+	background: linear-gradient(180deg, rgba(99,102,241,0.9), rgba(59,130,246,0.9));
+	border-radius: 9999px;
+	border: 3px solid rgba(17,24,39,0.6); /* blend with dark background */
+}
+::-webkit-scrollbar-thumb:hover {
+	filter: brightness(1.05);
+}
+
+/* Firefox */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: rgba(99,102,241,0.9) transparent;
+}
+
+/* Make scrollbars on specific panels stand out less: */
+.glass-card, .glass-card * {
+	scrollbar-color: rgba(99,102,241,0.8) transparent;
+}
+
+/* On small overflow areas (pre blocks), ensure smooth corners */
+pre {
+	scrollbar-gutter: stable both-edges;
+}
+
+/* Utility class if you want to apply to a specific element */
+.styled-scrollbar::-webkit-scrollbar-thumb {
+	background: linear-gradient(180deg, rgba(99,102,241,0.95), rgba(99,102,241,0.75));
+}
+
+/* Light theme overrides when documentElement has class 'light' */
+.light {
+	--bg-default: #f4f6f9; /* soft off-white */
+	--panel: #ffffff; /* card background */
+	--text-default: #0f1724; /* primary text */
+	--text-muted: #475569; /* muted text */
+	--border: rgba(15,23,42,0.06);
+	--accent-1: #2563eb; /* blue */
+	--accent-2: #7c3aed; /* purple */
+	--progress-track-bg: rgba(15,23,42,0.06);
+	--progress-fill: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+	--progress-percent-color: #6b7280;
+}
+
+/* Map common dark utility classes to light equivalents under .light */
+.light .bg-gray-900 { background-color: var(--bg-default) !important; }
+.light .text-white { color: var(--text-default) !important; }
+.light .bg-black\/30 { background-color: rgba(2,6,23,0.04) !important; }
+.light .glass-card { background-color: var(--panel) !important; box-shadow: 0 6px 18px rgba(12,18,28,0.04); }
+.light .backdrop-blur-xl { backdrop-filter: none !important; }
+.light .border-white\/10 { border-color: var(--border) !important; }
+.light .bg-white\/5 { background-color: rgba(255,255,255,0.96) !important; }
+.light .bg-gray-800 { background-color: #f8fafc !important; }
+.light .bg-gray-700 { background-color: #f1f5f9 !important; }
+.light .text-gray-300 { color: var(--text-muted) !important; }
+.light .text-gray-400 { color: #64748b !important; }
+.light .text-gray-500 { color: #64748b !important; }
+.light .border { border-color: var(--border) !important; }
+
+/* Make SVGs and icons inherit text color and use currentColor for stroke/fill in light mode */
+.light svg, .light svg * {
+	color: var(--text-default) !important;
+	fill: currentColor !important;
+	stroke: currentColor !important;
+}
+
+/* Links and accent elements */
+.light .hover\:text-blue-400:hover { color: var(--accent-1) !important; }
+.light .text-blue-400 { color: var(--accent-1) !important; }
+.light .from-blue-400 { color: var(--accent-1) !important; }
+
+/* Ensure body background/text change */
+.light body, .light .font-inter { background-color: var(--bg-default) !important; color: #0f172a !important; }
+
+/* Additional mappings (gradient backgrounds and common utility classes) */
+.light .bg-gradient-to-b { background-image: linear-gradient(to bottom, #f8fafc, #ffffff) !important; }
+.light .from-gray-900, .light .via-black, .light .to-gray-950 { background: transparent !important; }
+.light .bg-black { background-color: rgba(0,0,0,0.03) !important; }
+.light .bg-black\/30 { background-color: rgba(0,0,0,0.06) !important; }
+.light .text-gray-300, .light .text-gray-200 { color: var(--text-muted) !important; }
+.light .shadow-2xl { box-shadow: 0 6px 20px rgba(15,23,42,0.06) !important; }
+
+/* Also support data-theme attribute selectors for better specificity */
+[data-theme="light"] .bg-gray-900 { background-color: var(--bg-default) !important; }
+[data-theme="light"] .text-white { color: #0f172a !important; }
+[data-theme="light"] .glass-card { background-color: rgba(255,255,255,0.95) !important; }
+[data-theme="light"] .bg-gradient-to-b { background-image: linear-gradient(to bottom, #f8fafc, #ffffff) !important; }
+
+/* Themed modal styles used across the app */
+.themed-modal {
+	width: min(520px, 92%);
+	max-width: 720px;
+	border-radius: 14px;
+	padding: 18px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	box-shadow: 0 18px 44px rgba(2,6,23,0.6);
+	border: 1px solid rgba(255,255,255,0.06);
+	background: linear-gradient(180deg, rgba(2,6,23,0.85), rgba(2,6,23,0.7));
+}
+
+/* Light variant */
+.light .themed-modal, [data-theme="light"] .themed-modal {
+	background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(245,247,250,0.94));
+	box-shadow: 0 12px 34px rgba(15,23,42,0.08);
+	border: 1px solid rgba(15,23,42,0.06);
+}
+
+/* Dark variant: make modal fully black for a crisp look */
+.themed-modal.dark, [data-theme="dark"] .themed-modal {
+	background: #000000; /* fully black */
+	border: 1px solid rgba(255,255,255,0.02);
+	box-shadow: 0 24px 60px rgba(0,0,0,0.85);
+}
+
+.themed-modal .themed-card {
+	width: 140px;
+	height: 140px;
+	border-radius: 10px;
+	overflow: hidden;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(255,255,255,0.03);
+	border: 1px solid rgba(255,255,255,0.06);
+}
+
+.light .themed-modal .themed-card, [data-theme="light"] .themed-modal .themed-card {
+	background: #ffffff;
+	border: 1px solid rgba(15,23,42,0.04);
+}
+
+.themed-modal .title { font-size: 18px; font-weight: 700; color: #e6eef8; }
+.light .themed-modal .title, [data-theme="light"] .themed-modal .title { color: #0f1724; }
+
+.themed-modal .subtitle { color: #cbd5e1; }
+.light .themed-modal .subtitle, [data-theme="light"] .themed-modal .subtitle { color: #475569; }
+
+.themed-modal .progress-track { width: 100%; height: 8px; background: var(--progress-track-bg); border-radius: 999px; overflow: hidden; }
+.themed-modal .progress-fill { height: 100%; background: var(--progress-fill); transition: width 300ms ease; }
+.themed-modal .percent { font-size: 12px; color: var(--progress-percent-color); }
+.light .themed-modal .percent { color: var(--progress-percent-color); }
