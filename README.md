@@ -37,6 +37,30 @@ ShadowHorn itself is completely free to use, and its core data collection and co
   <img src="src/assets/README_imgs/Workflow.png" alt="ShadowHorn Workflow" width="80%" />
 </div>
 
+### 🌐 Data Sources
+
+ShadowHorn currently collects OSINT from:
+
+<p align="center">
+  <img src="src/assets/icons/github.png" alt="GitHub" width="52" style="border-radius: 999px; margin: 4px;" />
+  <img src="src/assets/icons/twitter.png" alt="Twitter" width="52" style="border-radius: 999px; margin: 4px;" />
+  <img src="src/assets/icons/reddit.png" alt="Reddit" width="52" style="border-radius: 999px; margin: 4px;" />
+  <img src="src/assets/icons/medium.png" alt="Medium" width="52" style="border-radius: 999px; margin: 4px;" />
+  <img src="src/assets/icons/stack-overflow.png" alt="StackOverflow" width="52" style="border-radius: 999px; margin: 4px;" />
+  <img src="src/assets/icons/snapchat.png" alt="Snapchat" width="52" style="border-radius: 999px; margin: 4px;" />
+  <img src="src/assets/icons/duckduckgo.png" alt="DuckDuckGo" width="52" style="border-radius: 999px; margin: 4px;" />
+  <img src="src/assets/icons/breachDirectory.png" alt="BreachDirectory" width="52" style="border-radius: 999px; margin: 4px;" />
+</p>
+
+- **GitHub** – repositories, stars, followers, activity.
+- **Twitter/X** – profile metadata and recent tweets.
+- **Reddit** – posts, comments, and karma.
+- **Medium** – articles and author profiles.
+- **StackOverflow** – questions, answers, and reputation.
+- **Snapchat** – public profile metadata.
+- **Search Engines (DuckDuckGo)** – extra links and OSINT context.
+- **BreachDirectory & Compromise Check** – breach indicators and credential exposure.
+
 ## 🚀 Features
 
 ShadowHorn is organized into intuitive modules to streamline your intelligence workflow:
