@@ -448,7 +448,15 @@ const DataCorrelation = () => {
             <label className="text-gray-300 text-sm">OpenRouter Model</label>
             <select
               value={modelChoice}
-              onChange={(e) => setModelChoice(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setModelChoice(value);
+                // If user picks a specific model while backend is Auto,
+                // automatically switch to OpenRouter-first behaviour.
+                if (value !== "auto" && backendChoice === "auto") {
+                  setBackendChoice("openrouter");
+                }
+              }}
               className="w-full mt-1 px-4 py-3 rounded-lg bg-black/30 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-gray-500 transition"
             >
               <option value="auto">Auto (try best free models with fallback)</option>

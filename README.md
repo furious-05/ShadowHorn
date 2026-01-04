@@ -165,26 +165,42 @@ pip install -r req.txt
 For reference, the core backend requirements (`requirements.txt`) are:
 
 ```text
-blinker==1.9.0
-certifi==2025.11.12
-charset-normalizer==3.4.4
-click==8.3.1
-Flask==3.1.2
-flask-cors==6.0.1
-idna==3.11
-itsdangerous==2.2.0
-Jinja2==3.1.6
-MarkupSafe==3.0.3
-requests==2.32.5
-urllib3==2.5.0
-Werkzeug==3.1.3
+# Core Flask Dependencies
+Flask>=3.1.0
+flask-cors>=6.0.0
+
+# HTTP & Network
+requests>=2.30.0
+urllib3>=2.0.0
 aiohttp>=3.9
-beautifulsoup4>=4.12.2
-lxml==4.9.3
-pymongo
-openai
-nest_asyncio
-reportlab==3.6.13
+
+# Web Parsing
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# Database
+pymongo>=4.0
+
+# AI/API
+openai>=1.0
+
+# Utilities
+nest_asyncio>=1.5.0
+click>=8.0.0
+Jinja2>=3.0.0
+MarkupSafe>=3.0.0
+itsdangerous>=2.0.0
+Werkzeug>=3.0.0
+certifi>=2025.0.0
+charset-normalizer>=3.0.0
+idna>=3.0
+blinker>=1.0
+
+# PDF Generation
+reportlab>=4.0.0
+
+torch
+transformers
 ```
 
 The local FLAN extras (`req.txt`) are:
@@ -221,10 +237,10 @@ transformers
     ```
 
 3.  **Frontend Setup**
-    Open a new terminal in the root directory:
-    ```powershell
-    npm install
-    ```
+  Open a new terminal in the root directory and install frontend dependencies (including Vite):
+  ```powershell
+  npm install
+  ```
 
 ### 🐧 Linux / macOS Setup
 
@@ -243,10 +259,10 @@ transformers
     ```
 
 3.  **Frontend Setup**
-    Open a new terminal in the root directory:
-    ```bash
-    npm install
-    ```
+  Open a new terminal in the root directory and install frontend dependencies (including Vite):
+  ```bash
+  npm install
+  ```
 ---
 
 ## 🕹️ Usage
@@ -271,7 +287,12 @@ python app.py
 
 ### 2. Start the frontend (all platforms)
 
-In a new terminal at the project root:
+On first run, install dependencies (this also pulls Vite):
+```bash
+npm install
+```
+
+Then start the development server:
 ```bash
 npm run dev
 ```
@@ -403,6 +424,50 @@ Controls cleanup of stored data.
 ### 10. About
 - Static page describing ShadowHorn’s purpose, capabilities, and intended users.
 - Helpful for onboarding new analysts or stakeholders to the platform.
+
+---
+
+## 🛠️ Troubleshooting
+
+**GitHub collector shows 401 errors**
+
+You might see output like:
+
+```json
+"GitHub": {
+  "data": {
+    "followers_sample": [],
+    "following_sample": [],
+    "orgs": [],
+    "repos": [],
+    "user": {}
+  },
+  "wait_seconds": 0,
+  "warnings": [
+    "Request failed: 401",
+    "Request failed: 401",
+    "Request failed: 401",
+    "Request failed: 401",
+    "Request failed: 401"
+  ]
+}
+```
+
+A `401` here almost always means your **GitHub token is invalid or expired**.
+
+- Go to GitHub → **Settings → Developer settings → Personal access tokens**.
+- Generate a new token with `repo` and `read:user` scopes (fine‑grained or classic).
+- Paste the new token into **Settings → API Key Configuration → GitHub** in ShadowHorn and **Save & Lock**.
+
+**OpenRouter key and expiry**
+
+OpenRouter API keys do not expire automatically, but you can revoke them.
+
+- In OpenRouter, create a key **without a short expiry** (no temporary key).
+- Paste it into **Settings → API Key Configuration → OpenRouter**.
+- If you change or revoke the key on OpenRouter, update it in ShadowHorn as well.
+
+If correlation suddenly starts failing with authentication errors, re‑check both the GitHub token and OpenRouter key in the Settings page.
 
 ---
 
