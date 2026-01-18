@@ -37,6 +37,15 @@ ShadowHorn itself is completely free to use, and its core data collection and co
   <img src="src/assets/README_imgs/Workflow.png" alt="ShadowHorn Workflow" width="80%" />
 </div>
 
+<div align="center" style="margin: 24px 0;">
+  <h3>▶️ Installation & Basic Usage Video</h3>
+  <a href="https://www.youtube.com/watch?v=SGoNOTvT9C0" target="_blank">
+    <img src="https://img.youtube.com/vi/SGoNOTvT9C0/0.jpg" alt="Watch the video" width="600"/>
+  </a>
+  <p>Click the image above to watch the installation and basic usage guide for ShadowHorn.</p>
+</div>
+
+
 ### 🌐 Data Sources
 
 ShadowHorn currently collects OSINT from:
