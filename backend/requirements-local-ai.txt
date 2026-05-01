@@ -1,0 +1,5 @@
+# Local FLAN AI model dependencies (optional, ~2GB+ download)
+# Install only if you want offline/local correlation without OpenRouter
+torch>=2.2.0
+transformers>=4.40.0
+sentence-transformers>=2.7.0

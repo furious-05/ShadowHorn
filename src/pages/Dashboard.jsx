@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import Sidebar from "./components/Sidebar";
-import Topbar from "./components/Topbar";
+import Sidebar from "../components/Sidebar";
+import Topbar from "../components/Topbar";
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -12,7 +12,8 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
-import { ThemeContext } from "./contexts/ThemeContext";
+import { ThemeContext } from "../contexts/ThemeContext";
+import { authFetch } from "../utils/auth";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -34,7 +35,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchSummary = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/dashboard-summary');
+        const res = await authFetch('/api/dashboard-summary');
         const data = await res.json();
         setSummary(data);
       } catch (e) {
@@ -44,7 +45,7 @@ const Dashboard = () => {
 
     const fetchStatus = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/status');
+        const res = await authFetch('/api/status');
         const data = await res.json();
         setStatus(data);
       } catch (e) {
@@ -56,7 +57,7 @@ const Dashboard = () => {
     fetchStatus();
     const fetchProfiles = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/profiles');
+        const res = await authFetch('/api/profiles');
         const data = await res.json();
         setProfiles(data);
       } catch (e) {
@@ -327,7 +328,7 @@ const TrendSmall = ({ typeKey = 'Correlation' }) => {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/trends?days=14');
+        const res = await authFetch('/api/trends?days=14');
         const data = await res.json();
         if (data && data.dates && data.counts) {
           setTrend({ labels: data.dates, values: data.counts[typeKey] || Array(data.dates.length).fill(0) });

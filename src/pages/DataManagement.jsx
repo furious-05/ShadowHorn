@@ -1,12 +1,14 @@
-import React, { useState } from "react";
-import axios from "axios";
-import Sidebar from "./components/Sidebar";
-import Topbar from "./components/Topbar";
+import React, { useState, useContext } from "react";
+import Sidebar from "../components/Sidebar";
+import Topbar from "../components/Topbar";
+import { ThemeContext } from "../contexts/ThemeContext";
 import { AnimatePresence, motion } from "framer-motion";
-
-const BASE_URL = "http://localhost:5000";
+import { authFetch } from "../utils/auth";
 
 const DataManagement = () => {
+  const { theme } = useContext(ThemeContext);
+  const isDark = theme === "dark";
+
   const [options, setOptions] = useState({
     collections: true,
     correlations: true,
@@ -30,7 +32,7 @@ const DataManagement = () => {
 
   const runCleanup = async ({ all = false } = {}) => {
     const payload = all
-      ? { collections: true, correlations: true, files: true, identifier: "" }
+      ? { collections: true, correlations: true, files: true, identifier: "", confirm_all: true }
       : {
           collections: options.collections,
           correlations: options.correlations,
@@ -47,8 +49,13 @@ const DataManagement = () => {
     setLoading(true);
     setStatusMessage("");
     try {
-      const res = await axios.post(`${BASE_URL}/api/cleanup`, payload);
-      if (res.data?.status === "success") {
+      const res = await authFetch("/api/cleanup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data?.status === "success") {
         if (payload.identifier) {
           setStatusMessage("Cleanup completed for the specified identifier.");
         } else if (all) {
@@ -58,12 +65,11 @@ const DataManagement = () => {
         }
         setStatusType("success");
       } else {
-        setStatusMessage(res.data?.error || "Cleanup finished with a warning.");
+        setStatusMessage(data?.error || "Cleanup finished with a warning.");
         setStatusType("error");
       }
     } catch (err) {
-      const msg = err.response?.data?.error || "Unable to complete cleanup operation.";
-      setStatusMessage(msg);
+      setStatusMessage("Unable to complete cleanup operation.");
       setStatusType("error");
     } finally {
       setLoading(false);
@@ -72,6 +78,12 @@ const DataManagement = () => {
   };
 
   const handleScopedCleanup = () => {
+    if (!identifier.trim()) {
+      setStatusMessage("Enter an identifier to run targeted cleanup. Use 'Clean all data' to remove everything.");
+      setStatusType("error");
+      setTimeout(() => setStatusMessage(""), 6000);
+      return;
+    }
     runCleanup({ all: false });
   };
 
@@ -100,7 +112,7 @@ const DataManagement = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-black text-white">
+    <div className={`flex h-screen ${isDark ? "bg-gradient-to-b from-gray-900 via-gray-900 to-black text-white" : "bg-gray-50 text-gray-900"}`}>
       <Sidebar />
       <div className="flex-1 flex flex-col p-6 overflow-auto">
         <Topbar />
@@ -108,60 +120,62 @@ const DataManagement = () => {
         <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent">
           Data Management
         </h1>
-        <p className="text-sm text-gray-400 mb-6 max-w-3xl">
+        <p className={`text-sm mb-6 max-w-3xl ${isDark ? "text-gray-400" : "text-gray-600"}`}>
           Manage the lifecycle of collected data in ShadowHorn. Use this console to remove
           historical OSINT collections, correlation results, and generated OSINT files 
           for a specific profile or as a controlled environment reset.
         </p>
 
-        <div className="glass-card bg-white/5 border border-white/10 backdrop-blur-lg p-8 rounded-2xl shadow-xl max-w-4xl">
-          <h2 className="text-lg font-semibold mb-4 text-gray-200">Cleanup scope</h2>
+        <div className={`glass-card backdrop-blur-lg p-8 rounded-2xl shadow-xl max-w-4xl ${
+          isDark ? "bg-white/5 border border-white/10" : "bg-white border border-gray-200 shadow-sm"
+        }`}>
+          <h2 className={`text-lg font-semibold mb-4 ${isDark ? "text-gray-200" : "text-gray-800"}`}>Cleanup scope</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <label className="flex items-start gap-3 text-sm text-gray-200">
+            <label className={`flex items-start gap-3 text-sm ${isDark ? "text-gray-200" : "text-gray-800"}`}>
               <input
                 type="checkbox"
                 name="collections"
                 checked={options.collections}
                 onChange={handleOptionChange}
-                className="mt-1 h-4 w-4 rounded border-gray-500 bg-black/40"
+                className={`mt-1 h-4 w-4 rounded border-gray-500 ${isDark ? "bg-black/40" : "bg-white"}`}
               />
               <span>
                 <span className="font-semibold">Collected OSINT datasets</span>
-                <span className="block text-xs text-gray-400">
+                <span className={`block text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>
                   MongoDB collections: GitHub, Twitter, Reddit, ProfileOSINT, Search Engines,
                   BreachDirectory and Compromise.
                 </span>
               </span>
             </label>
 
-            <label className="flex items-start gap-3 text-sm text-gray-200">
+            <label className={`flex items-start gap-3 text-sm ${isDark ? "text-gray-200" : "text-gray-800"}`}>
               <input
                 type="checkbox"
                 name="correlations"
                 checked={options.correlations}
                 onChange={handleOptionChange}
-                className="mt-1 h-4 w-4 rounded border-gray-500 bg-black/40"
+                className={`mt-1 h-4 w-4 rounded border-gray-500 ${isDark ? "bg-black/40" : "bg-white"}`}
               />
               <span>
                 <span className="font-semibold">Correlation results</span>
-                <span className="block text-xs text-gray-400">
+                <span className={`block text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>
                   AI correlation documents stored in the data_correlation database.
                 </span>
               </span>
             </label>
 
-            <label className="flex items-start gap-3 text-sm text-gray-200 md:col-span-2">
+            <label className={`flex items-start gap-3 text-sm md:col-span-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
               <input
                 type="checkbox"
                 name="files"
                 checked={options.files}
                 onChange={handleOptionChange}
-                className="mt-1 h-4 w-4 rounded border-gray-500 bg-black/40"
+                className={`mt-1 h-4 w-4 rounded border-gray-500 ${isDark ? "bg-black/40" : "bg-white"}`}
               />
               <span>
                 <span className="font-semibold">OSINT result files</span>
-                <span className="block text-xs text-gray-400">
+                <span className={`block text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>
                   JSON artifacts written to the <span className="font-mono">backend/osint_results</span> directory.
                 </span>
               </span>
@@ -169,8 +183,8 @@ const DataManagement = () => {
           </div>
 
           <div className="mb-6">
-            <h3 className="text-sm font-semibold text-gray-200 mb-2">Optional identifier filter</h3>
-            <p className="text-xs text-gray-400 mb-2">
+            <h3 className={`text-sm font-semibold mb-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>Optional identifier filter</h3>
+            <p className={`text-xs mb-2 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
               Provide an identifier (for example: email address, username, or profile key) to
               restrict cleanup to a single profile. Leave empty to apply cleanup to all profiles
               within the selected categories.
@@ -180,7 +194,9 @@ const DataManagement = () => {
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               placeholder="email / username / profile identifier"
-              className="w-full mt-1 px-3 py-2 bg-black/40 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-400 transition text-sm"
+              className={`w-full mt-1 px-3 py-2 rounded-lg border focus:outline-none focus:border-blue-400 transition text-sm ${
+                isDark ? "bg-black/40 border-gray-600 text-white" : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-500"
+              }`}
             />
           </div>
 
@@ -191,7 +207,9 @@ const DataManagement = () => {
                 disabled={loading}
                 className={`px-5 py-2 rounded-lg font-semibold text-sm shadow-lg border transition ${
                   loading
-                    ? "bg-blue-700/60 border-blue-500/60 text-gray-200 cursor-wait"
+                    ? isDark
+                      ? "bg-blue-700/60 border-blue-500/60 text-gray-200 cursor-wait"
+                      : "bg-blue-500/85 border-blue-400 text-white cursor-wait shadow-blue-500/20"
                     : "bg-blue-600/80 hover:bg-blue-500 border-blue-500/60 text-white"
                 }`}
               >
@@ -203,8 +221,12 @@ const DataManagement = () => {
                 disabled={loading}
                 className={`px-5 py-2 rounded-lg font-semibold text-sm shadow-lg border transition ${
                   loading
-                    ? "bg-gray-800/80 border-gray-600 text-gray-300 cursor-wait"
-                    : "bg-transparent hover:bg-red-600/10 border-red-500/60 text-red-300"
+                    ? isDark
+                      ? "bg-gray-800/80 border-gray-600 text-gray-300 cursor-wait"
+                      : "bg-gray-200 border-gray-400 text-gray-600 cursor-wait"
+                    : isDark
+                      ? "bg-transparent hover:bg-red-600/10 border-red-500/60 text-red-300"
+                      : "bg-transparent hover:bg-red-50 border-red-500/60 text-red-600"
                 }`}
               >
                 Clean all data
@@ -223,7 +245,9 @@ const DataManagement = () => {
                   ? "text-green-400"
                   : statusType === "error"
                   ? "text-red-400"
-                  : "text-gray-300"
+                  : isDark
+                  ? "text-gray-300"
+                  : "text-gray-700"
               }`}
             >
               {statusMessage}

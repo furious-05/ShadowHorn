@@ -6,6 +6,7 @@ import time
 from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
 from openai import APIError, OpenAI
+from json_repair import repair_json
 
 # ==========================
 # Configuration
@@ -547,14 +548,12 @@ def _clean_single_platform(
                 temperature=0.1,  # Low temperature for structured extraction
             )
             raw_content = resp.choices[0].message.content
-            cleaned = clean_model_text(raw_content)
-            
-            try:
-                parsed = json.loads(cleaned)
+            parsed = parse_llm_json(raw_content)
+            if isinstance(parsed, dict):
                 parsed["_cleaned_by"] = model_id
                 parsed["_platform"] = platform
                 return parsed
-            except json.JSONDecodeError:
+            else:
                 continue
         except Exception as e:
             continue
@@ -1124,33 +1123,40 @@ def run_deep_clean_correlation(
 
 
 # ==========================
-# Helpers: clean & extract JSON
+# Helpers: clean & parse LLM JSON output
 # ==========================
-def clean_model_text(text: str) -> str:
-    """
-    Clean common wrappers (code fences, leading labels, markdown).
-    Then attempt to find the first JSON object in the text and return it.
+def parse_llm_json(text: str) -> Any:
+    """Parse JSON from LLM output, handling malformed responses robustly.
+
+    Uses json_repair to handle common LLM mistakes like:
+    - Trailing commas, missing commas
+    - Anonymous object wrappers  },{"key":...}
+    - Unbalanced braces, extra/missing brackets
+    - Code fences, markdown wrappers, commentary before/after JSON
+    - Unicode escaping issues
     """
     if not text:
-        return ""
+        return None
 
-    # Remove common code fences and their language tags
+    # Strip code fences and markdown wrappers
     text = re.sub(r"```(?:json|js|text)?\s*", "", text)
     text = text.replace("```", "")
-    # Remove common leading/trailing whitespace and > quote characters
     text = text.strip()
 
-    # If the assistant returned an inline explanation followed by JSON, try to extract the JSON object
-    # Find the first { and last } that likely form a JSON object.
-    # This is greedy but helps recover if the model prints commentary + JSON.
+    # Try standard parse first (fast path for well-formed JSON)
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Extract JSON region if model added commentary around it
     first_brace = text.find("{")
     last_brace = text.rfind("}")
-    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-        candidate = text[first_brace:last_brace + 1]
-        return candidate.strip()
+    if first_brace != -1 and last_brace > first_brace:
+        text = text[first_brace:last_brace + 1]
 
-    # As a fallback, return whole cleaned text
-    return text
+    # Use json_repair to fix any structural issues
+    return repair_json(text, return_objects=True)
 
 
 def _rule_based_correlation(structured_osint: Any, identifier: Optional[str] = None) -> Dict[str, Any]:
@@ -1887,7 +1893,7 @@ def run_correlation(
 
     # Remote OpenRouter backend with multi-model fallback
     # Create AI client at call time using env or DB-stored key
-    api_key = get_openrouter_key_from_db()
+    api_key = get_openrouter_key_from_db(mongo_uri=mongo_uri)
     if not api_key:
         result = {"error": "OpenRouter/OpenAI API key not found in environment or database (api_keys.openRouter)"}
         if include_backend:
@@ -1918,33 +1924,21 @@ def run_correlation(
                     # some providers return different shapes; stringify resp if needed
                     raw_content = str(resp)
 
-                cleaned = clean_model_text(raw_content)
+                parsed = parse_llm_json(raw_content)
 
-                # final parse attempt
-                try:
-                    parsed = json.loads(cleaned)
-                    result = parsed
-                    if isinstance(result, dict):
-                        result = _coerce_profile_schema(result)
-                        if include_backend:
-                            result.setdefault("backend_used", chosen_backend)
-                            result.setdefault("model_used", model_id)
-                            if first_model and first_model != model_id:
-                                result.setdefault("fallback_from", first_model)
-                    return result
-                except json.JSONDecodeError:
-                    # Return helpful error with raw + cleaned attempt so caller can debug
-                    result = {
-                        "error": "Model did not return valid JSON",
-                        "raw_response": raw_content,
-                        "cleaned_attempt": cleaned,
-                        "model_used": model_id,
-                    }
+                if isinstance(parsed, dict):
+                    result = _coerce_profile_schema(parsed)
                     if include_backend:
                         result.setdefault("backend_used", chosen_backend)
+                        result.setdefault("model_used", model_id)
                         if first_model and first_model != model_id:
                             result.setdefault("fallback_from", first_model)
                     return result
+                elif parsed is not None:
+                    return parsed
+                else:
+                    last_error = "Model returned empty response"
+                    break
 
             except Exception as e:
                 msg = str(e)

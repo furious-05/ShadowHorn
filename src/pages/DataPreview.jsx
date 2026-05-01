@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import Sidebar from "./components/Sidebar";
-import Topbar from "./components/Topbar";
-import { ThemeContext } from "./contexts/ThemeContext";
+import Sidebar from "../components/Sidebar";
+import Topbar from "../components/Topbar";
+import { ThemeContext } from "../contexts/ThemeContext";
+import { authFetch } from "../utils/auth";
 
 const DataPreview = () => {
   const navigate = useNavigate();
@@ -20,7 +21,7 @@ const DataPreview = () => {
   useEffect(() => {
     const fetchIdentifiers = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/list-identifiers");
+        const res = await authFetch("/api/list-identifiers");
         const data = await res.json();
         if (data.identifiers) {
           setIdentifiers(data.identifiers);
@@ -48,8 +49,8 @@ const DataPreview = () => {
 
     try {
       const [osintRes, corrRes] = await Promise.all([
-        fetch(`http://localhost:5000/api/get-osint-data/${encodeURIComponent(selectedIdentifier)}`),
-        fetch(`http://localhost:5000/api/get-correlation/${encodeURIComponent(selectedIdentifier)}`),
+        authFetch(`/api/get-osint-data/${encodeURIComponent(selectedIdentifier)}`),
+        authFetch(`/api/get-correlation/${encodeURIComponent(selectedIdentifier)}`),
       ]);
 
       const osintJson = await osintRes.json();
@@ -80,12 +81,13 @@ const DataPreview = () => {
   };
 
   const renderJson = (data) => {
-    if (!data) return <p className="text-gray-500 text-sm">No data loaded yet.</p>;
+    if (!data) return <p className={`text-sm ${isDark ? "text-gray-500" : "text-gray-400"}`}>No data loaded yet.</p>;
+    const preCls = `text-xs whitespace-pre-wrap break-words ${isDark ? "text-gray-100" : "text-gray-800"}`;
     if (typeof data === "string") {
-      return <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">{data}</pre>;
+      return <pre className={preCls}>{data}</pre>;
     }
     return (
-      <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
+      <pre className={preCls}>
         {JSON.stringify(data, null, 2)}
       </pre>
     );
@@ -245,7 +247,7 @@ const DataPreview = () => {
                       const text = typeof osintData === "string" ? osintData : JSON.stringify(osintData, null, 2);
                       navigator.clipboard.writeText(text);
                     }}
-                    className="p-1.5 rounded-lg bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white transition-all"
+                    className={`p-1.5 rounded-lg transition-all ${isDark ? "bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}
                     title="Copy to clipboard"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -266,7 +268,7 @@ const DataPreview = () => {
                       document.body.removeChild(a);
                       URL.revokeObjectURL(url);
                     }}
-                    className="p-1.5 rounded-lg bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white transition-all"
+                    className={`p-1.5 rounded-lg transition-all ${isDark ? "bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}
                     title="Download JSON"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -305,7 +307,7 @@ const DataPreview = () => {
                       const text = typeof correlationData === "string" ? correlationData : JSON.stringify(correlationData, null, 2);
                       navigator.clipboard.writeText(text);
                     }}
-                    className="p-1.5 rounded-lg bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white transition-all"
+                    className={`p-1.5 rounded-lg transition-all ${isDark ? "bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}
                     title="Copy to clipboard"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -326,7 +328,7 @@ const DataPreview = () => {
                       document.body.removeChild(a);
                       URL.revokeObjectURL(url);
                     }}
-                    className="p-1.5 rounded-lg bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white transition-all"
+                    className={`p-1.5 rounded-lg transition-all ${isDark ? "bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}
                     title="Download JSON"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

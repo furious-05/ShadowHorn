@@ -1,0 +1,59 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    # Uncomment to expose MongoDB externally (conflicts if local mongo runs on 27017)
+    # ports:
+    #   - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        # Set to "true" to include local FLAN AI model support (~2GB+ extra)
+        # Default: false (uses OpenRouter for correlation instead)
+        #
+        # Build with local AI:  docker compose build --build-arg INSTALL_LOCAL_AI=true backend
+        # Build without (default): docker compose build backend
+        # Add later to existing image: docker compose exec backend pip install -r requirements-local-ai.txt
+        INSTALL_LOCAL_AI: ${INSTALL_LOCAL_AI:-false}
+    restart: unless-stopped
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/
+      - JWT_SECRET=${JWT_SECRET:-shadowhorn-secret-change-in-production}
+      - FLASK_DEBUG=false
+      # When using local FLAN AI, use 1 worker to avoid duplicate model loading (OOM)
+      # Without local AI, 2 workers is fine
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+      - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-300}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    volumes:
+      - osint_results:/app/osint_results
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
+  osint_results:

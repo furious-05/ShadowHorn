@@ -89,7 +89,7 @@ def generate_comprehensive_report(
             {"label": "Profile Type", "value": profile_type},
             {"label": "About", "value": about},
             {"label": "Primary Location", "value": location},
-            {"label": "Primary Identifiers", "value": ", ".join(extract_usernames(profile)) or "None"},
+            {"label": "Primary Identifiers", "value": ", ".join(extract_usernames(profile)) or "None identified"},
             {"label": "Status", "value": "Compromised" if compromised else "Not Compromised"},
         ],
     })
@@ -134,7 +134,7 @@ def generate_comprehensive_report(
             if isinstance(repo, dict):
                 repo_items.append({
                     "label": repo.get("name", "Unknown"),
-                    "value": f"⭐ {repo.get('stars', 0)} | 🔄 {repo.get('forks', 0)} | {repo.get('description', 'No description')[:60]}"
+                    "value": f"⭐ {repo.get('stars', 0)} | 🔄 {repo.get('forks', 0)} | {(repo.get('description') or 'No description')[:60]}"
                 })
         if repo_items:
             report["sections"].append({
@@ -588,10 +588,12 @@ def extract_usernames(profile: Dict) -> list:
     if isinstance(usernames_obj, dict):
         usernames = []
         for platform, data in usernames_obj.items():
-            if isinstance(data, dict) and "handle" in data:
-                usernames.append(data["handle"])
-            elif isinstance(data, str):
-                usernames.append(data)
+            if isinstance(data, dict):
+                handle = data.get("handle") or data.get("username")
+                if handle:
+                    usernames.append(str(handle))
+            elif data:
+                usernames.append(str(data))
         return usernames
     return []
 

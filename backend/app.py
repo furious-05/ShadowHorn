@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import asyncio
 import nest_asyncio
@@ -27,10 +28,15 @@ from duckduckgo_collector import collect_osint_sync
 # -----------------------------
 # AI Correlation Module
 # -----------------------------
-from openai_correlation import run_correlation, detect_backends, choose_backend, run_deep_clean_correlation  # AI correlation engines
-from intel_report import generate_intel_report  # AI intelligence reporting
-from comprehensive_report import generate_comprehensive_report  # Unified comprehensive report
+from openai_correlation import run_correlation, detect_backends, choose_backend, run_deep_clean_correlation
+from intel_report import generate_intel_report
+from comprehensive_report import generate_comprehensive_report
 from report_pdf import build_pdf_bytes
+
+# -----------------------------
+# Authentication Module
+# -----------------------------
+from auth import register_auth_routes, require_auth, ensure_default_user
 
 # -----------------------------
 # Apply nest_asyncio
@@ -41,12 +47,17 @@ nest_asyncio.apply()
 # Flask App
 # -----------------------------
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": os.environ.get("CORS_ORIGINS", "*").split(",")}})
+
+# -----------------------------
+# Register Auth Routes
+# -----------------------------
+register_auth_routes(app)
 
 # -----------------------------
 # MongoDB Connection
 # -----------------------------
-MONGO_URI = "mongodb://localhost:27017/"
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/")
 client = MongoClient(MONGO_URI)
 
 settings_db = client["settings_db"]
@@ -72,6 +83,14 @@ collections = {
 # -----------------------------
 OSINT_RESULTS_DIR = Path("osint_results")
 OSINT_RESULTS_DIR.mkdir(exist_ok=True)
+
+
+def sanitize_identifier(identifier: str) -> str:
+    """Remove path traversal characters and dangerous patterns from identifiers."""
+    identifier = identifier.strip()
+    identifier = identifier.replace("..", "").replace("/", "").replace("\\", "")
+    identifier = re.sub(r"[^\w@.\-+]", "_", identifier)
+    return identifier[:200]
 
 # -----------------------------
 # Platform Name Mapping (for query parsing)
@@ -149,8 +168,8 @@ def get_saved_keys():
             "twitter": "",
             "github": "",
             "breachDirectory": "",
-            "openRouter": "",       # <-- new key
-            "correlationModel": ""  # <-- optional: lets you store model choice
+            "openRouter": "",
+            "correlationModel": ""
         }
     # Ensure defaults if some keys are missing
     return {
@@ -302,6 +321,7 @@ async def collect_async(username, full_name, keyword, selected_platforms, api_ke
 # Collect Profile Route
 # -----------------------------
 @app.route("/api/collect-profile", methods=["POST"])
+@require_auth
 def collect_profile_route():
     data = request.get_json()
     if not data:
@@ -334,10 +354,11 @@ def collect_profile_route():
     if not identifier and not platform_usernames:
         return jsonify({"error": "Provide at least username, email, or fullname"}), 400
     
-    # If no identifier but we have platform-specific usernames, use a combined identifier
     if not identifier and platform_usernames:
         identifier = "_".join([f"{k}_{v}" if isinstance(v, str) else f"{k}_{v[0]}" 
                                for k, v in list(platform_usernames.items())[:3]])
+
+    identifier = sanitize_identifier(identifier)
 
     results = asyncio.run(
         collect_async(
@@ -377,6 +398,7 @@ def collect_profile_route():
 # Run-Correlation Route (AI)
 # -----------------------------
 @app.route("/api/run-correlation", methods=["POST"])
+@require_auth
 def run_correlation_route():
     """
     Frontend POSTs JSON:
@@ -431,7 +453,7 @@ def run_correlation_route():
             print(f"Failed to remove existing correlation docs for {identifier}: {e}")
 
     try:
-        status = detect_backends()
+        status = detect_backends(mongo_uri=MONGO_URI)
 
         # -----------------------------
         # Backend strategy by hint
@@ -441,6 +463,7 @@ def run_correlation_route():
                 mode=mode,
                 custom_prompt=custom_prompt,
                 identifier=identifier,
+                mongo_uri=MONGO_URI,
                 backend=backend_name,
                 include_backend=True,
                 preferred_model=data.get("model"),
@@ -544,6 +567,7 @@ def run_correlation_route():
 # Deep Clean Correlation Route (SSE for real-time progress)
 # -----------------------------
 @app.route("/api/run-deep-clean", methods=["POST"])
+@require_auth
 def run_deep_clean_route():
     """
     Deep Clean Correlation Mode with real-time progress via Server-Sent Events.
@@ -660,11 +684,13 @@ def run_deep_clean_route():
 # API Key Routes
 # -----------------------------
 @app.route("/api/get-keys", methods=["GET"])
+@require_auth
 def get_keys():
     return jsonify(get_saved_keys()), 200
 
 
 @app.route("/api/status", methods=["GET"])
+@require_auth
 def api_status():
     """Return API key presence and MongoDB connectivity status."""
     keys = get_saved_keys()
@@ -686,11 +712,12 @@ def api_status():
 
 
 @app.route("/api/correlation/backends", methods=["GET"])
+@require_auth
 def correlation_backends_status():
     """Expose correlation backend capabilities and default selection for the UI."""
     try:
-        status = detect_backends()
-        default_backend = choose_backend()
+        status = detect_backends(mongo_uri=MONGO_URI)
+        default_backend = choose_backend(mongo_uri=MONGO_URI)
         return jsonify({
             "backends": status,
             "default_backend": default_backend,
@@ -700,6 +727,7 @@ def correlation_backends_status():
 
 
 @app.route("/api/dashboard-summary", methods=["GET"])
+@require_auth
 def dashboard_summary():
     """Provide counts and last-collected identifiers across main collections and correlation info."""
     try:
@@ -737,6 +765,7 @@ def dashboard_summary():
 
 
 @app.route("/api/trends", methods=["GET"])
+@require_auth
 def api_trends():
     """Return per-day counts for the last N days for each collection and correlations."""
     try:
@@ -781,6 +810,7 @@ def api_trends():
 
 
 @app.route("/api/profiles", methods=["GET"])
+@require_auth
 def api_profiles():
     """Return aggregated list of collected profiles (identifiers) with platforms and extracted usernames/handles."""
     try:
@@ -856,6 +886,7 @@ def api_profiles():
 
 
 @app.route("/api/recent-top", methods=["GET"])
+@require_auth
 def api_recent_top():
     """Return recent correlation docs and top identifiers across collections."""
     try:
@@ -890,6 +921,7 @@ def api_recent_top():
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/save-keys", methods=["POST"])
+@require_auth
 def save_keys():
     data = request.get_json()
     if not data:
@@ -906,8 +938,8 @@ def save_keys():
             "twitter": data.get("twitter", ""),
             "github": data.get("github", ""),
             "breachDirectory": data.get("breachDirectory", ""),
-            "openRouter": data.get("openRouter", ""),           # <-- new
-            "correlationModel": data.get("correlationModel", "")  # <-- new
+            "openRouter": data.get("openRouter", ""),
+            "correlationModel": data.get("correlationModel", "")
         }},
         upsert=True
     )
@@ -918,6 +950,7 @@ def save_keys():
 # Node Visualization API Routes
 # -----------------------------
 @app.route("/api/list-identifiers", methods=["GET"])
+@require_auth
 def list_identifiers():
     """Return list of all identifiers with their collection history."""
     try:
@@ -952,6 +985,7 @@ def list_identifiers():
 
 
 @app.route("/api/get-correlation/<identifier>", methods=["GET"])
+@require_auth
 def get_correlation(identifier):
     """Fetch correlation data for a specific identifier."""
     try:
@@ -975,6 +1009,7 @@ def get_correlation(identifier):
 
 
 @app.route("/api/get-osint-data/<identifier>", methods=["GET"])
+@require_auth
 def get_osint_data(identifier):
     """Fetch raw OSINT collection data for visualization."""
     try:
@@ -1002,6 +1037,7 @@ def get_osint_data(identifier):
 
 
 @app.route("/api/report/pdf", methods=["POST"])
+@require_auth
 def api_report_pdf():
     """Generate a professional PDF from a provided report JSON structure.
     Expected body: { "report": {..}, "filename": "optional" }
@@ -1030,6 +1066,7 @@ def api_report_pdf():
 
 
 @app.route("/api/report/intel", methods=["POST"])
+@require_auth
 def api_report_intel():
   """Generate an AI-powered intelligence narrative for the report page.
 
@@ -1075,6 +1112,7 @@ def api_report_intel():
 
 
 @app.route("/api/report/comprehensive", methods=["POST"])
+@require_auth
 def api_report_comprehensive():
   """Generate a single comprehensive intelligence report.
 
@@ -1117,6 +1155,7 @@ def api_report_comprehensive():
 
 
 @app.route("/api/cleanup", methods=["POST"])
+@require_auth
 def api_cleanup():
     """Clean collected OSINT data and/or correlation data.
 
@@ -1133,10 +1172,16 @@ def api_cleanup():
         clear_collections = bool(payload.get("collections"))
         clear_correlations = bool(payload.get("correlations"))
         clear_files = bool(payload.get("files"))
-        identifier = (payload.get("identifier") or "").strip()
+        identifier = sanitize_identifier(payload.get("identifier") or "")
 
         if not (clear_collections or clear_correlations or clear_files):
             return jsonify({"error": "Select at least one data type to clean."}), 400
+
+        # Require explicit 'confirm_all' flag to delete without an identifier.
+        # This prevents accidental mass deletion when the identifier field is
+        # left blank on the targeted-cleanup path.
+        if not identifier and not payload.get("confirm_all"):
+            return jsonify({"error": "Provide an identifier for targeted cleanup, or use the global cleanup action."}), 400
 
         result = {"collections": {}, "correlations": 0, "files_removed": 0}
 
@@ -1187,7 +1232,13 @@ def api_cleanup():
 
 
 # -----------------------------
+# Initialize default user on startup
+# -----------------------------
+ensure_default_user()
+
+# -----------------------------
 # Run Server
 # -----------------------------
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host="0.0.0.0", port=5000, debug=debug_mode)

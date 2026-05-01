@@ -1,0 +1,9 @@
+node_modules
+dist
+.git
+backend/venv
+backend/__pycache__
+backend/osint_results
+*.log
+.DS_Store
+.env

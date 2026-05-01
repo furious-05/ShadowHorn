@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import Sidebar from "./components/Sidebar";
-import Topbar from "./components/Topbar";
-import loaderVideoDark from "./assets/Video.mp4";
-import loaderVideoLight from "./assets/WhiteTheme.mp4";
-import { ThemeContext } from "./contexts/ThemeContext";
+import Sidebar from "../components/Sidebar";
+import Topbar from "../components/Topbar";
+import loaderVideoDark from "../assets/Video.mp4";
+import loaderVideoLight from "../assets/WhiteTheme.mp4";
+import { ThemeContext } from "../contexts/ThemeContext";
+import { authFetch } from "../utils/auth";
 
 const platforms = [
   "BreachDirectory",
@@ -176,7 +177,7 @@ const DataCollection = () => {
       }
 
       try {
-        const res = await fetch("http://localhost:5000/api/collect-profile", {
+        const res = await authFetch("/api/collect-profile", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...data, platforms: [platform] }),
@@ -353,8 +354,8 @@ const DataCollection = () => {
                     }`}
                   />
                   {field === "username" && (
-                    <p className="text-gray-500 text-xs mt-1">
-                      💡 Use query syntax for different usernames per platform: <code className="bg-gray-800 px-1 rounded">generic=main;github=ghuser;snapchat=scuser</code>
+                    <p className={`text-xs mt-1 ${isDark ? "text-gray-500" : "text-gray-500"}`}>
+                      Use query syntax for different usernames per platform: <code className={`px-1 rounded ${isDark ? "bg-gray-800" : "bg-gray-100 text-gray-700"}`}>generic=main;github=ghuser;snapchat=scuser</code>
                     </p>
                   )}
                 </div>
@@ -418,7 +419,7 @@ const DataCollection = () => {
                         onClick={() => {
                           navigator.clipboard.writeText(output);
                         }}
-                        className="p-1.5 rounded-lg bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white transition-all"
+                        className={`p-1.5 rounded-lg transition-all ${isDark ? "bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}
                         title="Copy to clipboard"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -438,7 +439,7 @@ const DataCollection = () => {
                           document.body.removeChild(a);
                           URL.revokeObjectURL(url);
                         }}
-                        className="p-1.5 rounded-lg bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white transition-all"
+                        className={`p-1.5 rounded-lg transition-all ${isDark ? "bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}
                         title="Download JSON"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -530,13 +531,12 @@ const DataCollection = () => {
           )}
         </AnimatePresence>
 
-        <p className="mt-2 text-gray-400 text-xs">
+        <p className={`mt-2 text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
           Ensure your API keys in <strong>Settings</strong> are filled for accurate data correlation.
         </p>
-        {/* Footer: sticks to bottom when content is short, flows after content when long */}
-        <div className="mt-auto pt-4 border-t border-white/5 flex justify-between items-center">
-          <button onClick={() => navigate('/dashboard')} className="px-4 py-2 rounded-full bg-gray-700 hover:bg-gray-600 text-white font-medium shadow">Back</button>
-          <button onClick={() => navigate('/datacorrelation')} className="px-5 py-3 rounded-full bg-gray-700 hover:bg-gray-600 text-white font-semibold shadow-lg">Next</button>
+        <div className={`mt-auto pt-4 flex justify-between items-center border-t ${isDark ? "border-white/5" : "border-gray-200"}`}>
+          <button onClick={() => navigate('/dashboard')} className={`px-4 py-2 rounded-full font-medium shadow ${isDark ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-800"}`}>Back</button>
+          <button onClick={() => navigate('/datacorrelation')} className={`px-5 py-3 rounded-full font-semibold shadow-lg ${isDark ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-blue-600 hover:bg-blue-500 text-white"}`}>Next</button>
         </div>
       </div>
     </div>

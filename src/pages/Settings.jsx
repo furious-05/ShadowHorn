@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from "react";
-import axios from "axios";
-import Sidebar from "./components/Sidebar";
-import Topbar from "./components/Topbar";
-
-const BASE_URL = "http://localhost:5000"; // Flask backend URL
+import React, { useState, useEffect, useContext } from "react";
+import Sidebar from "../components/Sidebar";
+import Topbar from "../components/Topbar";
+import { ThemeContext } from "../contexts/ThemeContext";
+import { authFetch } from "../utils/auth";
 
 const Settings = () => {
+  const { theme } = useContext(ThemeContext);
+  const isDark = theme === "dark";
   const [apiKeys, setApiKeys] = useState({
     twitter: "",
     github: "",
     breachDirectory: "",
-    openRouter: "", // <-- New key for OpenRouter
+    openRouter: "",
   });
 
   const [isLocked, setIsLocked] = useState(false);
@@ -21,9 +22,10 @@ const Settings = () => {
   useEffect(() => {
     const fetchKeys = async () => {
       try {
-        const res = await axios.get(`${BASE_URL}/api/get-keys`);
-        setApiKeys(res.data);
-        setIsLocked(true); // Lock inputs initially
+        const res = await authFetch("/api/get-keys");
+        const data = await res.json();
+        setApiKeys(data);
+        setIsLocked(true);
       } catch (err) {
         console.error(err);
         setMessage("Failed to load API keys.");
@@ -39,7 +41,11 @@ const Settings = () => {
 
   const handleSave = async () => {
     try {
-      await axios.post(`${BASE_URL}/api/save-keys`, apiKeys);
+      await authFetch("/api/save-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(apiKeys),
+      });
       setIsLocked(true);
       setMessage("API keys saved successfully!");
       setMessageType("success");
@@ -58,11 +64,20 @@ const Settings = () => {
   };
 
   const inputClass = (locked) =>
-    `w-full mt-1 px-3 py-2 bg-black/40 border border-gray-600 rounded-lg text-white
+    isDark
+      ? `w-full mt-1 px-3 py-2 bg-black/40 border border-gray-600 rounded-lg text-white
+     focus:outline-none focus:border-blue-400 transition ${locked ? "opacity-50 cursor-not-allowed" : ""}`
+      : `w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900
      focus:outline-none focus:border-blue-400 transition ${locked ? "opacity-50 cursor-not-allowed" : ""}`;
 
   return (
-    <div className="flex h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-black text-white">
+    <div
+      className={
+        isDark
+          ? "flex h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-black text-white"
+          : "flex h-screen bg-gray-50 text-gray-900"
+      }
+    >
       <Sidebar />
       <div className="flex-1 flex flex-col p-6 overflow-auto">
         <Topbar />
@@ -72,19 +87,27 @@ const Settings = () => {
           System Settings
         </h1>
 
-        <div className="glass-card bg-white/5 border border-white/10 backdrop-blur-lg p-8 rounded-2xl shadow-xl max-w-3xl mb-8">
-          <h2 className="text-xl font-semibold mb-6 text-gray-300">
+        <div
+          className={
+            isDark
+              ? "glass-card bg-white/5 border border-white/10 backdrop-blur-lg p-8 rounded-2xl shadow-xl max-w-3xl mb-8"
+              : "glass-card bg-white border border-gray-200 shadow-sm p-8 rounded-2xl max-w-3xl mb-8"
+          }
+        >
+          <h2
+            className={`text-xl font-semibold mb-6 ${isDark ? "text-gray-300" : "text-gray-800"}`}
+          >
             API Key Configuration
           </h2>
 
-          <p className="text-xs text-gray-400 mb-6 max-w-xl">
+          <p className={`text-xs mb-6 max-w-xl ${isDark ? "text-gray-400" : "text-gray-600"}`}>
             All collectors use free API tiers where possible: Twitter, GitHub and OpenRouter can be used for free; only the BreachDirectory key requires a paid plan from the provider.
           </p>
 
           {/* Inputs */}
           {["twitter", "github", "breachDirectory", "openRouter"].map((key) => (
             <div className="mb-5" key={key}>
-              <label className="text-sm text-gray-400">{key} API Key</label>
+              <label className={`text-sm ${isDark ? "text-gray-400" : "text-gray-600"}`}>{key} API Key</label>
               <input
                 type="text"
                 name={key}
@@ -103,7 +126,11 @@ const Settings = () => {
               href="https://rapidapi.com/rohan-patra/api/breachdirectory"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-400 text-sm underline hover:text-blue-300 transition"
+              className={
+                isDark
+                  ? "text-blue-400 text-sm underline hover:text-blue-300 transition"
+                  : "text-blue-600 text-sm underline hover:text-blue-500 transition"
+              }
             >
               ➜ Visit BreachDirectory Website
             </a>
@@ -111,7 +138,11 @@ const Settings = () => {
               href="https://openrouter.ai/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-400 text-sm underline hover:text-blue-300 transition"
+              className={
+                isDark
+                  ? "text-blue-400 text-sm underline hover:text-blue-300 transition"
+                  : "text-blue-600 text-sm underline hover:text-blue-500 transition"
+              }
             >
               ➜ Visit OpenRouter Website
             </a>
@@ -119,7 +150,11 @@ const Settings = () => {
               href="https://youtu.be/Azkyhcxc1cE?si=uhW1wIuEiNxEW_c6"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-400 text-sm underline hover:text-blue-300 transition"
+              className={
+                isDark
+                  ? "text-blue-400 text-sm underline hover:text-blue-300 transition"
+                  : "text-blue-600 text-sm underline hover:text-blue-500 transition"
+              }
             >
               ➜ OpenRouter API key walkthrough (YouTube)
             </a>

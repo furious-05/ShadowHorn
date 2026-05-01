@@ -1,11 +1,12 @@
 import React, { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import Sidebar from "./components/Sidebar";
-import Topbar from "./components/Topbar";
-import loaderVideoDark from "./assets/Video.mp4";
-import loaderVideoLight from "./assets/WhiteTheme.mp4";
-import { ThemeContext } from "./contexts/ThemeContext";
+import Sidebar from "../components/Sidebar";
+import Topbar from "../components/Topbar";
+import loaderVideoDark from "../assets/Video.mp4";
+import loaderVideoLight from "../assets/WhiteTheme.mp4";
+import { ThemeContext } from "../contexts/ThemeContext";
+import { authFetch } from "../utils/auth";
 
 const DataCorrelation = () => {
   const [mergedProfile, setMergedProfile] = useState(null);
@@ -22,6 +23,7 @@ const DataCorrelation = () => {
   const [overwriteModal, setOverwriteModal] = useState({ show: false, identifier: "", existing_collected_at: null, payload: null });
   const [fallbackModal, setFallbackModal] = useState({ show: false, identifier: "", reason: "", payload: null });
   const { theme } = useContext(ThemeContext);
+  const isDark = theme === "dark";
 
   const navigate = useNavigate();
 
@@ -39,7 +41,7 @@ const DataCorrelation = () => {
   React.useEffect(() => {
     const loadBackendStatus = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/correlation/backends");
+        const res = await authFetch("/api/correlation/backends");
         const data = await res.json();
         setBackendStatus(data);
         if (data && data.default_backend) {
@@ -93,7 +95,7 @@ const DataCorrelation = () => {
       // professional flag removed — payload contains identifier, mode and optional prompt
 
       const callCorrelation = async (body) => {
-        const response = await fetch("http://localhost:5000/api/run-correlation", {
+        const response = await authFetch("/api/run-correlation", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body)
@@ -141,7 +143,7 @@ const DataCorrelation = () => {
     setProgressSteps([]);
     try {
       const body = { ...overwriteModal.payload, overwrite: true };
-      const response = await fetch("http://localhost:5000/api/run-correlation", {
+      const response = await authFetch("/api/run-correlation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
@@ -183,7 +185,7 @@ const DataCorrelation = () => {
     setProgressSteps([]);
     try {
       const body = { ...fallbackModal.payload, backend: "local_flan" };
-      const response = await fetch("http://localhost:5000/api/run-correlation", {
+      const response = await authFetch("/api/run-correlation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -249,7 +251,7 @@ const DataCorrelation = () => {
     setDeepCleanProgress([]);
 
     try {
-      const response = await fetch("http://localhost:5000/api/run-deep-clean", {
+      const response = await authFetch("/api/run-deep-clean", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -326,13 +328,13 @@ const DataCorrelation = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-black overflow-hidden">
+    <div className={`flex h-screen overflow-hidden ${isDark ? "bg-gradient-to-b from-gray-900 via-gray-900 to-black" : "bg-gray-50"}`}>
       <Sidebar />
       <div className="flex-1 flex flex-col p-6 overflow-auto relative">
         <Topbar />
 
         {/* Page Header */}
-        <h1 className="text-3xl font-bold text-white mb-6">Data Correlation</h1>
+        <h1 className={`text-3xl font-bold mb-6 ${isDark ? "text-white" : "text-gray-900"}`}>Data Correlation</h1>
 
         {/* Correlation Options */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -342,11 +344,17 @@ const DataCorrelation = () => {
               role="button"
               tabIndex={0}
               onClick={() => setCorrelationMode(mode)}
-              className={`glass-card p-5 rounded-2xl border border-white/10 backdrop-blur-md cursor-pointer transition active:scale-95 ${
-                correlationMode === mode ? "border-blue-500 bg-gray-800" : "hover:border-blue-400"
+              className={`glass-card p-5 rounded-2xl border backdrop-blur-md cursor-pointer transition active:scale-95 ${
+                isDark ? "border-white/10" : "border-gray-200"
+              } ${
+                correlationMode === mode
+                  ? isDark
+                    ? "border-blue-500 bg-gray-800"
+                    : "border-blue-500 bg-blue-50"
+                  : "hover:border-blue-400"
               }`}
             >
-              <h2 className="text-gray-200 text-lg font-semibold mb-2 flex items-center gap-2">
+              <h2 className={`${isDark ? "text-gray-200" : "text-gray-800"} text-lg font-semibold mb-2 flex items-center gap-2`}>
                 {mode === "fast" && (
                   <svg className="w-5 h-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -376,7 +384,7 @@ const DataCorrelation = () => {
                   ? "Deep Clean" 
                   : "Self-defined"}
               </h2>
-              <p className="text-gray-400 text-xs mb-2">
+              <p className={`${isDark ? "text-gray-400" : "text-gray-600"} text-xs mb-2`}>
                 {mode === "fast"
                   ? "Quick lightweight correlation."
                   : mode === "deep"
@@ -386,8 +394,12 @@ const DataCorrelation = () => {
                   : "Custom AI-powered correlation."}
               </p>
               {mode === "deep_clean" && correlationMode === "deep_clean" && (
-                <div className="mt-2 p-2 bg-teal-900/30 rounded-lg border border-teal-500/30">
-                  <p className="text-teal-300 text-[10px] flex items-center gap-1">
+                <div
+                  className={`mt-2 p-2 rounded-lg border ${
+                    isDark ? "bg-teal-900/30 border-teal-500/30" : "bg-teal-50 border-teal-300/70"
+                  }`}
+                >
+                  <p className={`${isDark ? "text-teal-300" : "text-teal-800"} text-[10px] flex items-center gap-1`}>
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
@@ -401,7 +413,9 @@ const DataCorrelation = () => {
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
                   placeholder="Describe your custom AI correlation..."
-                  className="w-full p-2 rounded bg-gray-800 text-white border border-gray-600 mt-2"
+                  className={`w-full p-2 rounded border mt-2 ${
+                    isDark ? "bg-gray-800 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"
+                  }`}
                   rows={3}
                 />
               )}
@@ -412,7 +426,7 @@ const DataCorrelation = () => {
         {/* Backend selection + status */}
         <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div className="md:col-span-2">
-            <label className="text-gray-300 text-sm">Correlation Engine</label>
+            <label className={`${isDark ? "text-gray-300" : "text-gray-700"} text-sm`}>Correlation Engine</label>
             <div className="mt-2 flex flex-wrap gap-3">
               {[
                 { key: "auto", label: "Auto (Prefer Local)" },
@@ -426,7 +440,9 @@ const DataCorrelation = () => {
                   className={`px-3 py-2 rounded-lg text-sm border transition ${
                     backendChoice === opt.key
                       ? "bg-blue-600 border-blue-500 text-white"
-                      : "bg-black/40 border-gray-600 text-gray-200 hover:border-blue-400"
+                      : isDark
+                        ? "bg-black/40 border-gray-600 text-gray-200 hover:border-blue-400"
+                        : "bg-white border-gray-300 text-gray-700 hover:border-blue-400"
                   }`}
                 >
                   {opt.label}
@@ -434,7 +450,7 @@ const DataCorrelation = () => {
               ))}
             </div>
             {backendStatus && (
-              <p className="mt-2 text-xs text-gray-400">
+              <p className={`mt-2 text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>
                 Default: {backendStatus.default_backend || "none"} · Local: {backendStatus.backends?.local_flan?.configured ? "ready" : "unavailable"} ·
                 Remote: {backendStatus.backends?.openrouter?.configured ? "ready" : "unavailable"}
               </p>
@@ -445,7 +461,7 @@ const DataCorrelation = () => {
         {/* OpenRouter model selection (when remote engine is in use) */}
         <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div className="md:col-span-2">
-            <label className="text-gray-300 text-sm">OpenRouter Model</label>
+            <label className={`${isDark ? "text-gray-300" : "text-gray-700"} text-sm`}>OpenRouter Model</label>
             <select
               value={modelChoice}
               onChange={(e) => {
@@ -457,7 +473,9 @@ const DataCorrelation = () => {
                   setBackendChoice("openrouter");
                 }
               }}
-              className="w-full mt-1 px-4 py-3 rounded-lg bg-black/30 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-gray-500 transition"
+              className={`w-full mt-1 px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-gray-500 transition ${
+                isDark ? "bg-black/30 border-gray-600 text-white" : "bg-white border-gray-300 text-gray-900"
+              }`}
             >
               <option value="auto">Auto (try best free models with fallback)</option>
               <option value="nex-agi/deepseek-v3.1-nex-n1:free">Nex AGI · DeepSeek V3.1 Nex N1 (free)</option>
@@ -467,7 +485,7 @@ const DataCorrelation = () => {
               <option value="openai/gpt-oss-20b:free">OpenAI · gpt-oss-20b (free)</option>
               <option value="openai/gpt-oss-120b:free">OpenAI · gpt-oss-120b (free)</option>
             </select>
-            <p className="mt-2 text-xs text-gray-400">
+            <p className={`mt-2 text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>
               When OpenRouter is used, the system will try your chosen model first and then fall back through other free models if it is unavailable or rate limited.
             </p>
           </div>
@@ -477,13 +495,15 @@ const DataCorrelation = () => {
         {/* Identifier override + Professional option */}
         <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div className="md:col-span-2">
-            <label className="text-gray-300 text-sm">Existing Identifier (username or email)</label>
+            <label className={`${isDark ? "text-gray-300" : "text-gray-700"} text-sm`}>Existing Identifier (username or email)</label>
             <input
               type="text"
               value={existingIdentifier}
               onChange={(e) => setExistingIdentifier(e.target.value)}
               placeholder="Optional: enter existing username or email to correlate"
-              className="w-full mt-1 px-4 py-3 rounded-lg bg-black/30 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-gray-500 transition"
+              className={`w-full mt-1 px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-gray-500 transition ${
+                isDark ? "bg-black/30 border-gray-600 text-white" : "bg-white border-gray-300 text-gray-900"
+              }`}
             />
           </div>
           {/* checkbox removed per UI feedback */}
@@ -495,8 +515,12 @@ const DataCorrelation = () => {
             disabled={isProcessing}
             className={`px-6 py-3 rounded-lg font-semibold text-white ${
               isProcessing
-                ? "bg-gray-700 cursor-not-allowed"
-                : "bg-gray-700 hover:bg-gray-600"
+                ? isDark
+                  ? "bg-gray-700 cursor-not-allowed"
+                  : "bg-gray-400 cursor-not-allowed"
+                : isDark
+                  ? "bg-gray-700 hover:bg-gray-600"
+                  : "bg-blue-600 hover:bg-blue-500"
             }`}
           >
             {isProcessing ? "Processing..." : "Start Correlation"}
@@ -624,7 +648,9 @@ const DataCorrelation = () => {
         {/* Display Output */}
         {mergedProfile && (
           <div className="flex flex-col md:flex-row gap-4">
-            <div className="glass-card shadow-lg bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl p-6 flex-1 overflow-hidden relative">
+            <div className={`glass-card shadow-lg rounded-2xl p-6 flex-1 overflow-hidden relative backdrop-blur-md ${
+              isDark ? "bg-white/5 border border-white/10" : "bg-white border border-gray-200 shadow-sm"
+            }`}>
               {/* Copy & Download Buttons */}
               <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
                 <button
@@ -639,7 +665,11 @@ const DataCorrelation = () => {
                     }
                   }}
                   id="copy-btn-correlation"
-                  className="p-2 rounded-lg bg-gray-700/80 hover:bg-gray-600 text-gray-300 hover:text-white transition-all duration-200 group"
+                  className={`p-2 rounded-lg transition-all duration-200 group ${
+                    isDark
+                      ? "bg-gray-700/80 hover:bg-gray-600 text-gray-300 hover:text-white"
+                      : "bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                  }`}
                   title="Copy to clipboard"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -657,7 +687,11 @@ const DataCorrelation = () => {
                     a.click();
                     URL.revokeObjectURL(url);
                   }}
-                  className="p-2 rounded-lg bg-gray-700/80 hover:bg-gray-600 text-gray-300 hover:text-white transition-all duration-200"
+                  className={`p-2 rounded-lg transition-all duration-200 ${
+                    isDark
+                      ? "bg-gray-700/80 hover:bg-gray-600 text-gray-300 hover:text-white"
+                      : "bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                  }`}
                   title="Download as JSON"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -666,17 +700,21 @@ const DataCorrelation = () => {
                 </button>
               </div>
 
-              <h2 className="text-gray-300 font-semibold mb-4">
+              <h2 className={`font-semibold mb-4 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
                 Correlation Result ({correlationMode === "deep_clean" ? "DEEP CLEAN" : correlationMode.toUpperCase()})
               </h2>
               {correlationMode === "deep_clean" && mergedProfile._deep_clean_meta && (
-                <div className="mb-3 text-xs text-teal-400 bg-teal-900/20 p-2 rounded-lg">
+                <div
+                  className={`mb-3 text-xs p-2 rounded-lg ${
+                    isDark ? "text-teal-400 bg-teal-900/20" : "text-teal-800 bg-teal-50"
+                  }`}
+                >
                   🧹 Platforms processed: {mergedProfile._deep_clean_meta.platforms_processed?.join(", ") || "N/A"}
                   <span className="ml-2">· Cleaned: {mergedProfile._deep_clean_meta.platforms_cleaned}</span>
                 </div>
               )}
               {typeof mergedProfile === "object" && mergedProfile && (mergedProfile.backend_used || mergedProfile.fallback_from) && (
-                <div className="mb-3 text-xs text-gray-400">
+                <div className={`mb-3 text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>
                   Engine: {mergedProfile.backend_used || "unknown"}
                   {mergedProfile.fallback_from && (
                     <span className="ml-2 text-[0.7rem] text-yellow-400">
@@ -685,8 +723,8 @@ const DataCorrelation = () => {
                   )}
                 </div>
               )}
-              <div className="overflow-y-auto max-h-[600px] w-full bg-gray-800 rounded-xl p-4">
-                <pre className="text-white whitespace-pre-wrap break-words">
+              <div className={`overflow-y-auto max-h-[600px] w-full rounded-xl p-4 ${isDark ? "bg-gray-800" : "bg-gray-50"}`}>
+                <pre className={`whitespace-pre-wrap break-words ${isDark ? "text-white" : "text-gray-900"}`}>
 {typeof mergedProfile === 'string' ? mergedProfile : JSON.stringify(mergedProfile, null, 2)}
                 </pre>
               </div>
@@ -694,9 +732,13 @@ const DataCorrelation = () => {
           </div>
         )}
         {/* Footer: sticks to bottom when content is short, flows after content when long */}
-        <div className="mt-auto pt-4 border-t border-white/5 flex justify-between items-center">
-          <button onClick={() => navigate('/datacollection')} className="px-4 py-2 rounded-full bg-gray-700 hover:bg-gray-600 text-white font-medium shadow">Back</button>
-          <button onClick={() => navigate('/node-visualization')} className="px-5 py-3 rounded-full bg-gray-700 hover:bg-gray-600 text-white font-semibold shadow-lg">Next</button>
+        <div className={`mt-auto pt-4 flex justify-between items-center border-t ${isDark ? "border-white/5" : "border-gray-200"}`}>
+          <button onClick={() => navigate('/datacollection')} className={`px-4 py-2 rounded-full font-medium shadow ${
+            isDark ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-800"
+          }`}>Back</button>
+          <button onClick={() => navigate('/node-visualization')} className={`px-5 py-3 rounded-full font-semibold shadow-lg ${
+            isDark ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-800"
+          }`}>Next</button>
         </div>
       </div>
     </div>
