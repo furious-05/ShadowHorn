@@ -2,6 +2,7 @@ import React, { useEffect, useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
+import cyberSecurityIcon from "../assets/icons/cyber-security.png";
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -31,6 +32,7 @@ const Dashboard = () => {
   const [status, setStatus] = useState(null);
   const [profiles, setProfiles] = useState(null);
   const [profilesOpen, setProfilesOpen] = useState(false);
+  const [tiSummary, setTiSummary] = useState(null);
 
   useEffect(() => {
     const fetchSummary = async () => {
@@ -53,8 +55,19 @@ const Dashboard = () => {
       }
     };
 
+    const fetchTiSummary = async () => {
+      try {
+        const res = await authFetch('/api/threat-intel/dashboard');
+        const data = await res.json();
+        setTiSummary(data);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
     fetchSummary();
     fetchStatus();
+    fetchTiSummary();
     const fetchProfiles = async () => {
       try {
         const res = await authFetch('/api/profiles');
@@ -94,6 +107,8 @@ const Dashboard = () => {
                 <div className="flex items-center gap-2"><span className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>TW</span><StatusPill ok={status.apis.twitter} /></div>
                 <div className="flex items-center gap-2"><span className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>BD</span><StatusPill ok={status.apis.breachDirectory} /></div>
                 <div className="flex items-center gap-2"><span className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>OR</span><StatusPill ok={status.apis.openRouter} /></div>
+                <div className="flex items-center gap-2"><span className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>VT</span><StatusPill ok={status.apis.virusTotal} /></div>
+                <div className="flex items-center gap-2"><span className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>SH</span><StatusPill ok={status.apis.shodan} /></div>
                 <div className="flex items-center gap-2"><span className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>DB</span><StatusPill ok={status.mongodb} /></div>
               </div>
             ) : (
@@ -195,6 +210,59 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+        {/* Threat Intelligence Summary Card */}
+        <div className={`mt-6 glass-card shadow-lg backdrop-blur-md rounded-2xl p-6 border cursor-pointer transition hover:scale-[1.005] ${isDark ? "bg-white/5 border-white/10" : "bg-white border-gray-200"}`}
+          onClick={() => navigate('/intelligence')}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-xl ${isDark ? "bg-blue-500/20" : "bg-blue-50"}`}>
+                <img src={cyberSecurityIcon} alt="Threat Intelligence" className="w-7 h-7 object-contain" />
+              </div>
+              <div>
+                <h3 className={`text-sm font-semibold ${isDark ? "text-gray-300" : "text-gray-900"}`}>Threat Intelligence</h3>
+                <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>IOC lookups across 6 sources</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="text-center">
+                <p className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{tiSummary?.total_lookups ?? 0}</p>
+                <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>Total Lookups</p>
+              </div>
+              {(tiSummary?.critical_count > 0 || tiSummary?.high_count > 0) && (
+                <div className="flex gap-2">
+                  {tiSummary.critical_count > 0 && (
+                    <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-600 text-white">
+                      {tiSummary.critical_count} Critical
+                    </span>
+                  )}
+                  {tiSummary.high_count > 0 && (
+                    <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-500 text-white">
+                      {tiSummary.high_count} High
+                    </span>
+                  )}
+                </div>
+              )}
+              <svg className={`w-5 h-5 ${isDark ? "text-gray-500" : "text-gray-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
+          {tiSummary?.recent?.length > 0 && (
+            <div className="mt-3 flex gap-2 overflow-x-auto">
+              {tiSummary.recent.slice(0, 5).map((item, idx) => {
+                const sevColors = { critical: "bg-red-500/20 text-red-400", high: "bg-orange-500/20 text-orange-400", medium: "bg-yellow-500/20 text-yellow-400", low: "bg-blue-500/20 text-blue-400", clean: "bg-green-500/20 text-green-400" };
+                const sev = item.threat_score?.severity || "clean";
+                return (
+                  <span key={idx} className={`px-2 py-1 rounded-md text-xs font-mono whitespace-nowrap ${sevColors[sev] || "bg-gray-500/20 text-gray-400"}`}>
+                    {item.ioc?.length > 30 ? item.ioc.substring(0, 30) + '...' : item.ioc} ({item.threat_score?.score ?? '?'})
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Profiles section: full-width preview + expandable list */}
         <div
           className={`mt-6 glass-card shadow-lg backdrop-blur-md rounded-2xl p-6 w-full border ${

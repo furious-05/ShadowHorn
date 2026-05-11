@@ -315,6 +315,57 @@ export const transformCorrelationToGraph = (correlationData) => {
 };
 
 /**
+ * Merge Threat Intelligence lookup results into graph data.
+ * Adds IOC nodes with threat-score-based coloring.
+ */
+export const mergeThreatIntelIntoGraph = (graphData, tiHistory) => {
+  if (!tiHistory || !Array.isArray(tiHistory) || tiHistory.length === 0) return graphData;
+
+  const { nodes, links } = graphData;
+  const nodeIds = new Set(nodes.map(n => n.id));
+
+  const tiGroupId = "ti-hub";
+  if (!nodeIds.has(tiGroupId)) {
+    nodes.push({
+      id: tiGroupId,
+      label: "Threat Intel",
+      type: "threat_intel_hub",
+    });
+    nodeIds.add(tiGroupId);
+  }
+
+  tiHistory.forEach((item) => {
+    const ioc = item.ioc;
+    const score = item.threat_score?.score ?? 0;
+    const severity = item.threat_score?.severity || "unknown";
+    const iocId = `ti-${ioc}`;
+
+    if (!nodeIds.has(iocId)) {
+      nodes.push({
+        id: iocId,
+        label: ioc.length > 25 ? ioc.substring(0, 25) + "..." : ioc,
+        type: "threat_intel",
+        ioc_type: item.ioc_type,
+        threat_score: score,
+        severity: severity,
+      });
+      nodeIds.add(iocId);
+
+      const linkKey = [tiGroupId, iocId].sort().join("-");
+      if (!links.some((l) => [l.source, l.target].sort().join("-") === linkKey)) {
+        links.push({
+          source: tiGroupId,
+          target: iocId,
+          relationship: `${item.ioc_type} (score: ${score})`,
+        });
+      }
+    }
+  });
+
+  return { nodes, links };
+};
+
+/**
  * Get summary text from correlation result
  */
 export const getCorrelationSummary = (correlationData) => {

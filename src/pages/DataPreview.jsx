@@ -364,19 +364,19 @@ const DataPreview = () => {
                 : "bg-gray-100 hover:bg-gray-200 text-gray-800"
             }`}
           >
-            Back to Correlation
+            &larr; Data Correlation
           </button>
           <button
             type="button"
             disabled={loading}
-            onClick={() => navigate("/reports")}
+            onClick={() => navigate("/intelligence")}
             className={`px-5 py-3 rounded-full font-semibold shadow-lg disabled:opacity-50 ${
               isDark
                 ? "bg-gray-700 hover:bg-gray-600 text-white"
                 : "bg-blue-600 hover:bg-blue-500 text-white"
             }`}
           >
-            Go to Reports
+            Threat Intel &rarr;
           </button>
         </div>
       </div>

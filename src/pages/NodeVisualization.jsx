@@ -23,6 +23,25 @@ import snapchatIcon from "../assets/icons/snapchat.png";
 import descriptionIcon from "../assets/icons/description.png";
 import aboutIcon from "../assets/icons/about.png";
 
+// Threat Intelligence icons
+import shieldIcon from "../assets/icons/shield.png";
+import virusTotalIcon from "../assets/icons/virustotal.png";
+import shodanIcon from "../assets/icons/shodan.png";
+import abuseipdbIcon from "../assets/icons/abuseipdb.png";
+import alienvaultIcon from "../assets/icons/alienvault.png";
+import abusechIcon from "../assets/icons/abusech.png";
+import nvdIcon from "../assets/icons/nvd.png";
+import ipAddressIcon from "../assets/icons/ip-address.png";
+import domainIcon from "../assets/icons/domain.png";
+import urlLinkIcon from "../assets/icons/url-link.png";
+import hashIcon from "../assets/icons/hash.png";
+import bugIcon from "../assets/icons/bug.png";
+import severityCriticalIcon from "../assets/icons/severity-critical.png";
+import severityHighIcon from "../assets/icons/severity-high.png";
+import severityMediumIcon from "../assets/icons/severity-medium.png";
+import severityCleanIcon from "../assets/icons/severity-clean.png";
+import cyberSecurityIcon from "../assets/icons/cyber-security.png";
+
 // Import layout algorithm
 import cose from "cytoscape-cose-bilkent";
 
@@ -45,6 +64,147 @@ const NodeVisualization = () => {
   const [selectedNode, setSelectedNode] = useState(null);
   const [showNodeDetails, setShowNodeDetails] = useState(false);
   const [showTopPanel, setShowTopPanel] = useState(true);
+  const [graphMode, setGraphMode] = useState("osint"); // "osint" or "cti"
+  const [tiElements, setTiElements] = useState([]);
+  const [tiLoading, setTiLoading] = useState(false);
+  const [ctiInvestigations, setCtiInvestigations] = useState([]);
+  const [selectedInvestigation, setSelectedInvestigation] = useState(""); // "" = all lookups
+
+  // Icon maps for CTI graph nodes
+  const iocTypeIcons = { ip: ipAddressIcon, domain: domainIcon, url: urlLinkIcon, hash: hashIcon, cve: bugIcon };
+  const iocTypeColors = { ip: "#3b82f6", domain: "#8b5cf6", url: "#06b6d4", hash: "#f59e0b", cve: "#ef4444" };
+  const sevIcons = { critical: severityCriticalIcon, high: severityHighIcon, medium: severityMediumIcon, low: shieldIcon, clean: severityCleanIcon };
+  const sevColors = { critical: "#ef4444", high: "#f97316", medium: "#eab308", low: "#3b82f6", clean: "#22c55e" };
+
+  const fetchCtiInvestigations = async () => {
+    try {
+      const res = await authFetch("/api/investigations");
+      const data = await res.json();
+      setCtiInvestigations(data.investigations || []);
+    } catch (e) {
+      console.error("Failed to fetch CTI investigations:", e);
+    }
+  };
+
+  const loadCTIGraph = async (investigationId) => {
+    setTiLoading(true);
+    try {
+      let url = "/api/threat-intel/history?limit=100";
+      if (investigationId) url += `&investigation_id=${investigationId}`;
+      const res = await authFetch(url);
+      const data = await res.json();
+      const history = data.history || [];
+      if (history.length === 0) {
+        setTiElements([]);
+        setTiLoading(false);
+        return;
+      }
+
+      const els = [];
+
+      const inv = investigationId ? ctiInvestigations.find(i => i.id === investigationId) : null;
+      const rootLabel = inv ? inv.name : "All IOC Lookups";
+      const rootColor = inv ? "#7c3aed" : "#3b82f6";
+
+      // ── Root hub ──
+      els.push({ data: { id: "ti-root", label: rootLabel, type: "threat_intel_hub", icon: cyberSecurityIcon, brandColor: rootColor } });
+
+      // ── Source ring (connected to hub) ──
+      const sourceNodes = [
+        { id: "src-vt", label: "VirusTotal", icon: virusTotalIcon, color: "#394EFF" },
+        { id: "src-sh", label: "Shodan", icon: shodanIcon, color: "#D1232A" },
+        { id: "src-ab", label: "AbuseIPDB", icon: abuseipdbIcon, color: "#e74c3c" },
+        { id: "src-otx", label: "AlienVault OTX", icon: alienvaultIcon, color: "#00B388" },
+        { id: "src-ac", label: "abuse.ch", icon: abusechIcon, color: "#ff6600" },
+        { id: "src-nvd", label: "NVD / CVE", icon: nvdIcon, color: "#002868" },
+      ];
+      sourceNodes.forEach(s => {
+        els.push({ data: { ...s, type: "threat_intel_source" } });
+        els.push({ data: { id: `e-root-${s.id}`, source: "ti-root", target: s.id, relationship: "feeds" } });
+      });
+
+      // ── IOC type groups ──
+      const typeGroups = {};
+      history.forEach(item => {
+        const t = item.ioc_type || "unknown";
+        if (!typeGroups[t]) typeGroups[t] = [];
+        typeGroups[t].push(item);
+      });
+
+      const typeLabels = { ip: "IP Addresses", domain: "Domains", url: "URLs", hash: "File Hashes", cve: "CVEs" };
+
+      Object.entries(typeGroups).forEach(([type, items]) => {
+        const groupId = `type-${type}`;
+        els.push({
+          data: {
+            id: groupId,
+            label: `${typeLabels[type] || type} (${items.length})`,
+            type: "threat_intel_group",
+            icon: iocTypeIcons[type] || shieldIcon,
+            brandColor: iocTypeColors[type] || "#6b7280",
+          }
+        });
+        els.push({ data: { id: `e-root-${groupId}`, source: "ti-root", target: groupId, relationship: `${items.length} IOCs` } });
+
+        // ── Severity subgroups within each type ──
+        const sevGroups = {};
+        items.forEach(item => {
+          const sev = item.threat_score?.severity || "unknown";
+          if (!sevGroups[sev]) sevGroups[sev] = [];
+          sevGroups[sev].push(item);
+        });
+
+        // Sort severity: critical first
+        const sevOrder = ["critical", "high", "medium", "low", "clean", "unknown"];
+        const sortedSevEntries = Object.entries(sevGroups).sort(
+          (a, b) => sevOrder.indexOf(a[0]) - sevOrder.indexOf(b[0])
+        );
+
+        sortedSevEntries.forEach(([sev, sevItems]) => {
+          const sevId = `${groupId}-${sev}`;
+          els.push({
+            data: {
+              id: sevId,
+              label: `${sev.toUpperCase()} (${sevItems.length})`,
+              type: "threat_intel_severity",
+              icon: sevIcons[sev] || shieldIcon,
+              brandColor: sevColors[sev] || "#6b7280",
+              severity: sev,
+            }
+          });
+          els.push({ data: { id: `e-${groupId}-${sevId}`, source: groupId, target: sevId, relationship: sev } });
+
+          // ── Individual IOC leaf nodes ──
+          sevItems.forEach((item, idx) => {
+            const score = item.threat_score?.score ?? 0;
+            const iocId = `ioc-${type}-${sev}-${idx}`;
+            const iocLabel = item.ioc.length > 30 ? item.ioc.substring(0, 30) + "..." : item.ioc;
+            els.push({
+              data: {
+                id: iocId,
+                label: iocLabel,
+                type: "threat_intel",
+                ioc_type: type,
+                threat_score: score,
+                severity: sev,
+                icon: iocTypeIcons[type] || shieldIcon,
+                brandColor: sevColors[sev] || "#6b7280",
+                fullIoc: item.ioc,
+              }
+            });
+            els.push({ data: { id: `e-${sevId}-${iocId}`, source: sevId, target: iocId, relationship: `${score}/100` } });
+          });
+        });
+      });
+
+      setTiElements(els);
+    } catch (e) {
+      console.error("Failed to load CTI graph:", e);
+      setTiElements([]);
+    } finally {
+      setTiLoading(false);
+    }
+  };
 
   // Fetch available identifiers on mount
   useEffect(() => {
@@ -145,6 +305,20 @@ const NodeVisualization = () => {
     }
   };
 
+  // Fetch investigations when switching to CTI mode
+  useEffect(() => {
+    if (graphMode === "cti") {
+      fetchCtiInvestigations();
+    }
+  }, [graphMode]);
+
+  // Load CTI graph when mode, investigation, or investigation list changes
+  useEffect(() => {
+    if (graphMode === "cti") {
+      loadCTIGraph(selectedInvestigation || undefined);
+    }
+  }, [graphMode, selectedInvestigation, ctiInvestigations]);
+
   // Handle node selection
   const handleNodeSelect = (node) => {
     if (node && node.isNode && !node.isEdge()) {
@@ -196,6 +370,39 @@ const NodeVisualization = () => {
               isDark ? "bg-gray-900 border-white/10" : "bg-white border-gray-200"
             }`}
           >
+            {/* Graph Mode Toggle */}
+            <div className="flex-shrink-0">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest block mb-1 font-bold">
+                Graph Mode
+              </label>
+              <div className={`inline-flex rounded-xl p-0.5 ${isDark ? "bg-gray-800/80 ring-1 ring-white/5" : "bg-gray-200 ring-1 ring-gray-300"}`}>
+                <button
+                  onClick={() => setGraphMode("osint")}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
+                    graphMode === "osint"
+                      ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/30"
+                      : isDark ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  OSINT
+                </button>
+                <button
+                  onClick={() => setGraphMode("cti")}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
+                    graphMode === "cti"
+                      ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-lg shadow-red-600/30"
+                      : isDark ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                  Threat Intel
+                </button>
+              </div>
+            </div>
+
+            {/* Profile selector — only for OSINT mode */}
+            {graphMode === "osint" && (
             <div className="flex-1">
               <label className="text-xs text-gray-500 uppercase tracking-wide block mb-1">
                 Select Profile
@@ -217,9 +424,53 @@ const NodeVisualization = () => {
                 ))}
               </select>
             </div>
+            )}
 
-            {/* Quick Summary */}
-                {correlationData && (
+            {/* Investigation selector — only for CTI mode */}
+            {graphMode === "cti" && (
+              <div className="flex-1 flex items-center gap-4">
+                <div className="flex-1 max-w-sm">
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest block mb-1 font-bold">
+                    View Scope
+                  </label>
+                  <select
+                    value={selectedInvestigation}
+                    onChange={(e) => setSelectedInvestigation(e.target.value)}
+                    className={`px-3 py-1.5 rounded-lg text-sm focus:outline-none transition w-full border ${
+                      isDark
+                        ? "bg-black/40 border-gray-600 text-white focus:border-purple-400"
+                        : "bg-white border-gray-300 text-gray-900 focus:border-purple-500"
+                    }`}
+                  >
+                    <option value="">All IOC Lookups (Global)</option>
+                    {ctiInvestigations.map((inv) => (
+                      <option key={inv.id} value={inv.id}>
+                        {inv.name} ({inv.ioc_count || 0} IOCs)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {selectedInvestigation && (() => {
+                  const inv = ctiInvestigations.find(i => i.id === selectedInvestigation);
+                  if (!inv) return null;
+                  return (
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/30">
+                        {inv.status || "active"}
+                      </span>
+                      {inv.tags?.map((tag, i) => (
+                        <span key={i} className={`px-1.5 py-0.5 rounded text-[10px] ${isDark ? "bg-gray-800 text-gray-400" : "bg-gray-200 text-gray-600"}`}>
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Quick Summary (OSINT mode only) */}
+                {graphMode === "osint" && correlationData && (
                   <div className="flex-shrink-0 flex gap-4 items-center">
                     <div className="text-right">
                       <div className="text-xs text-gray-500">Profile</div>
@@ -270,6 +521,52 @@ const NodeVisualization = () => {
                 </button>
               </div>
             )}
+
+            {/* CTI mode summary stats */}
+            {graphMode === "cti" && tiElements.length > 0 && (
+              <div className="flex items-center gap-4 flex-shrink-0">
+                {(() => {
+                  const nodes = tiElements.filter(e => e.data && !e.data.source);
+                  const iocs = nodes.filter(n => n.data.type === "threat_intel");
+                  const crit = iocs.filter(n => n.data.severity === "critical").length;
+                  const high = iocs.filter(n => n.data.severity === "high").length;
+                  return (
+                    <>
+                      <div className="text-right">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">IOCs</div>
+                        <div className={`text-sm font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{iocs.length}</div>
+                      </div>
+                      {crit > 0 && (
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-red-500/10 ring-1 ring-red-500/20">
+                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                          <span className="text-xs font-bold text-red-400">{crit} Critical</span>
+                        </div>
+                      )}
+                      {high > 0 && (
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-orange-500/10 ring-1 ring-orange-500/20">
+                          <div className="w-2 h-2 bg-orange-500 rounded-full" />
+                          <span className="text-xs font-bold text-orange-400">{high} High</span>
+                        </div>
+                      )}
+                      <div className="text-right">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Sources</div>
+                        <div className={`text-sm font-bold ${isDark ? "text-white" : "text-gray-900"}`}>6</div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Page navigation */}
+            <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+              <button onClick={() => navigate("/intelligence")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-700"}`}>
+                &larr; Threat Intel
+              </button>
+              <button onClick={() => navigate("/reports")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-blue-600 hover:bg-blue-500 text-white"}`}>
+                Reports &rarr;
+              </button>
+            </div>
           </div>
         )}
 
@@ -298,8 +595,8 @@ const NodeVisualization = () => {
             </div>
           )}
 
-          {/* No-correlation State with quick action */}
-          {noCorrelation && !error && (
+          {/* No-correlation State with quick action (OSINT mode only) */}
+          {graphMode === "osint" && noCorrelation && !error && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-20">
               <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-blue-500/40 rounded-lg p-8 max-w-md shadow-2xl">
                 <div className="flex items-center gap-3 mb-3">
@@ -345,8 +642,245 @@ const NodeVisualization = () => {
             </div>
           )}
 
-          {/* Graph Container */}
-          {!loading && !error && elements.length > 0 && (
+          {/* CTI Graph Mode */}
+          {graphMode === "cti" && !tiLoading && tiElements.length > 0 && (
+            <>
+              <CytoscapeComponent
+                elements={tiElements}
+                style={{ width: "100%", height: "100%" }}
+                layout={{
+                  name: "cose-bilkent",
+                  animate: "end",
+                  animationDuration: 600,
+                  fit: true,
+                  padding: 70,
+                  nodeDimensionsIncludeLabels: true,
+                  nodeRepulsion: 14000,
+                  idealEdgeLength: 160,
+                  edgeElasticity: 0.35,
+                  nestingFactor: 0.1,
+                  gravity: 0.15,
+                  numIter: 3000,
+                  tile: true,
+                  tilingPaddingVertical: 30,
+                  tilingPaddingHorizontal: 30,
+                  gravityRangeCompound: 1.5,
+                  gravityCompound: 1.0,
+                  gravityRange: 4.0,
+                  initialEnergyOnIncremental: 0.3,
+                }}
+                stylesheet={[
+                  // ── Base node styling ──
+                  {
+                    selector: "node",
+                    style: {
+                      "background-color": (ele) => ele.data("brandColor") || "#6b7280",
+                      "background-opacity": 0.95,
+                      "label": "data(label)",
+                      "font-size": (ele) => {
+                        const t = ele.data("type");
+                        if (t === "threat_intel_hub") return 13;
+                        if (t === "threat_intel_source") return 10;
+                        if (t === "threat_intel_group") return 11;
+                        if (t === "threat_intel_severity") return 10;
+                        return 9;
+                      },
+                      "font-weight": "bold",
+                      "color": isDark ? "#e5e7eb" : "#1e293b",
+                      "text-valign": "bottom",
+                      "text-halign": "center",
+                      "text-margin-y": 8,
+                      "text-outline-color": isDark ? "#020617" : "#f8fafc",
+                      "text-outline-width": 2.5,
+                      "border-width": (ele) => {
+                        const t = ele.data("type");
+                        if (t === "threat_intel_hub") return 3;
+                        if (t === "threat_intel_source" || t === "threat_intel_group") return 2.5;
+                        return 2;
+                      },
+                      "border-color": (ele) => ele.data("brandColor") || "#64748b",
+                      "border-opacity": 0.8,
+                      "width": (ele) => {
+                        const t = ele.data("type");
+                        if (t === "threat_intel_hub") return 64;
+                        if (t === "threat_intel_source") return 44;
+                        if (t === "threat_intel_group") return 48;
+                        if (t === "threat_intel_severity") return 38;
+                        return 28;
+                      },
+                      "height": (ele) => {
+                        const t = ele.data("type");
+                        if (t === "threat_intel_hub") return 64;
+                        if (t === "threat_intel_source") return 44;
+                        if (t === "threat_intel_group") return 48;
+                        if (t === "threat_intel_severity") return 38;
+                        return 28;
+                      },
+                      "shape": (ele) => {
+                        const t = ele.data("type");
+                        if (t === "threat_intel_hub") return "hexagon";
+                        if (t === "threat_intel_source") return "round-rectangle";
+                        if (t === "threat_intel_group") return "round-rectangle";
+                        if (t === "threat_intel_severity") return "diamond";
+                        return "ellipse";
+                      },
+                      "overlay-padding": 5,
+                      "overlay-opacity": 0,
+                    },
+                  },
+                  // ── Icon nodes ──
+                  {
+                    selector: "node[icon]",
+                    style: {
+                      "background-image": "data(icon)",
+                      "background-fit": "contain",
+                      "background-position-x": "50%",
+                      "background-position-y": "50%",
+                      "background-clip": "node",
+                      "background-image-containment": "over",
+                      "background-width": "65%",
+                      "background-height": "65%",
+                    },
+                  },
+                  // ── Hover / select ──
+                  {
+                    selector: "node:hover, node:selected",
+                    style: {
+                      "overlay-opacity": 0.2,
+                      "overlay-color": "#3b82f6",
+                      "z-index": 9999,
+                      "text-opacity": 1,
+                      "border-width": 3,
+                    },
+                  },
+                  // ── Edges ──
+                  {
+                    selector: "edge",
+                    style: {
+                      "width": (ele) => {
+                        const src = ele.source().data("type");
+                        if (src === "threat_intel_hub") return 2.5;
+                        if (src === "threat_intel_group" || src === "threat_intel_source") return 2;
+                        return 1.5;
+                      },
+                      "line-color": (ele) => {
+                        const tgtColor = ele.target().data("brandColor");
+                        return tgtColor ? tgtColor + "60" : (isDark ? "rgba(100,116,139,0.3)" : "rgba(148,163,184,0.4)");
+                      },
+                      "curve-style": "bezier",
+                      "target-arrow-shape": "triangle",
+                      "target-arrow-color": (ele) => {
+                        const tgtColor = ele.target().data("brandColor");
+                        return tgtColor ? tgtColor + "80" : (isDark ? "rgba(100,116,139,0.5)" : "rgba(148,163,184,0.6)");
+                      },
+                      "arrow-scale": 0.8,
+                      "label": "data(relationship)",
+                      "font-size": 7,
+                      "text-rotation": "autorotate",
+                      "text-opacity": 0.4,
+                      "color": isDark ? "#64748b" : "#94a3b8",
+                      "text-outline-color": isDark ? "#020617" : "#f8fafc",
+                      "text-outline-width": 1,
+                    },
+                  },
+                ]}
+                cy={(cy) => {
+                  cyRef.current = cy;
+                  cy.on("tap", "node", (e) => {
+                    const node = e.target;
+                    setSelectedNode({
+                      id: node.id(),
+                      label: node.data("label"),
+                      type: node.data("type"),
+                      severity: node.data("severity"),
+                      threat_score: node.data("threat_score"),
+                      ioc_type: node.data("ioc_type"),
+                      fullIoc: node.data("fullIoc"),
+                    });
+                    setShowNodeDetails(true);
+                  });
+                  cy.on("tap", (e) => {
+                    if (e.target === cy) {
+                      setShowNodeDetails(false);
+                      setSelectedNode(null);
+                    }
+                  });
+                }}
+              />
+            </>
+          )}
+
+          {/* CTI Graph Legend */}
+          {graphMode === "cti" && !tiLoading && tiElements.length > 0 && (
+            <div className={`absolute bottom-4 left-4 z-20 rounded-xl p-3 border backdrop-blur-md ${isDark ? "bg-gray-900/80 border-white/10" : "bg-white/90 border-gray-200 shadow-lg"}`}>
+              <p className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${isDark ? "text-gray-400" : "text-gray-500"}`}>CTI Graph Legend</p>
+              <div className="space-y-1.5">
+                <p className={`text-[9px] uppercase tracking-wider font-semibold mb-1 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Node Shapes</p>
+                {[
+                  { shape: "hexagon", color: "#7c3aed", label: "Hub (root)" },
+                  { shape: "rounded-rect", color: "#394EFF", label: "Source" },
+                  { shape: "rounded-rect", color: "#3b82f6", label: "IOC Type Group" },
+                  { shape: "diamond", color: "#f97316", label: "Severity Group" },
+                  { shape: "circle", color: "#ef4444", label: "IOC (leaf)" },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="w-3 h-3 flex-shrink-0" style={{ backgroundColor: item.color, borderRadius: item.shape === "circle" ? "50%" : item.shape === "diamond" ? "2px" : "3px", transform: item.shape === "diamond" ? "rotate(45deg) scale(0.8)" : "none" }} />
+                    <span className={`text-[10px] ${isDark ? "text-gray-400" : "text-gray-600"}`}>{item.label}</span>
+                  </div>
+                ))}
+                <div className={`border-t pt-1.5 mt-1.5 ${isDark ? "border-white/10" : "border-gray-200"}`}>
+                  <p className={`text-[9px] uppercase tracking-wider font-semibold mb-1 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Severity</p>
+                  {[
+                    { color: "#ef4444", label: "Critical" },
+                    { color: "#f97316", label: "High" },
+                    { color: "#eab308", label: "Medium" },
+                    { color: "#3b82f6", label: "Low" },
+                    { color: "#22c55e", label: "Clean" },
+                  ].map((s, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                      <span className={`text-[10px] ${isDark ? "text-gray-500" : "text-gray-500"}`}>{s.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {graphMode === "cti" && !tiLoading && tiElements.length === 0 && (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center max-w-md">
+                <svg xmlns="http://www.w3.org/2000/svg" className={`w-16 h-16 mx-auto mb-4 ${isDark ? "text-gray-600" : "text-gray-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <h3 className={`text-lg font-semibold mb-2 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                  {selectedInvestigation ? "No IOCs in This Investigation" : "No Threat Intel Data"}
+                </h3>
+                <p className={`text-sm mb-4 ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+                  {selectedInvestigation
+                    ? "This investigation has no IOC lookups yet. Go to Threat Intel, select this investigation, and analyze some IOCs."
+                    : "Run IOC lookups on the Threat Intel page first. You can also create an Investigation to organize IOCs into focused groups."}
+                </p>
+                {ctiInvestigations.length > 0 && !selectedInvestigation && (
+                  <p className={`text-xs ${isDark ? "text-gray-600" : "text-gray-400"}`}>
+                    You have {ctiInvestigations.length} investigation(s) — try selecting one from the dropdown above.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {graphMode === "cti" && tiLoading && (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <svg className="w-8 h-8 animate-spin mx-auto mb-3 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="3" className="opacity-25"/><path d="M4 12a8 8 0 018-8" strokeWidth="3"/></svg>
+                <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>Loading CTI graph...</p>
+              </div>
+            </div>
+          )}
+
+          {/* OSINT Graph Container */}
+          {graphMode === "osint" && !loading && !error && elements.length > 0 && (
             <>
               <CytoscapeComponent
                 elements={elements}
@@ -738,8 +1272,8 @@ const NodeVisualization = () => {
             </>
           )}
 
-          {/* Empty State */}
-          {!loading && !error && elements.length === 0 && selectedIdentifier && (
+          {/* Empty State (OSINT mode only) */}
+          {graphMode === "osint" && !loading && !error && elements.length === 0 && selectedIdentifier && (
             <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-black/60 via-slate-900/40 to-black/60 backdrop-blur-sm">
               <div className="text-center bg-slate-900/40 backdrop-blur-sm border border-white/5 rounded-2xl p-12 max-w-md">
                 <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-full flex items-center justify-center">
@@ -792,8 +1326,66 @@ const NodeVisualization = () => {
                   {selectedNode.label}
                 </h2>
                 <p className="text-xs text-gray-500 mb-4">
-                  Type: <span className="text-blue-300 font-semibold capitalize">{selectedNode.type}</span>
+                  Type: <span className="text-blue-300 font-semibold capitalize">{selectedNode.type?.replace(/_/g, " ")}</span>
                 </p>
+
+                {/* TI-specific details */}
+                {(selectedNode.type?.startsWith("threat_intel")) && (
+                  <div className="mb-4 space-y-3">
+                    {/* Threat Score Gauge */}
+                    {selectedNode.threat_score !== undefined && selectedNode.threat_score !== null && (
+                      <div className={`p-4 rounded-xl border ${isDark ? "bg-gray-800/60 border-white/5" : "bg-gray-50 border-gray-200"}`}>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Threat Score</p>
+                        <div className="flex items-end gap-3">
+                          <span className="text-4xl font-black tabular-nums" style={{
+                            color: selectedNode.threat_score >= 80 ? "#ef4444" : selectedNode.threat_score >= 60 ? "#f97316" : selectedNode.threat_score >= 40 ? "#eab308" : selectedNode.threat_score >= 20 ? "#3b82f6" : "#22c55e"
+                          }}>
+                            {selectedNode.threat_score}
+                          </span>
+                          <span className="text-xs text-gray-500 mb-1.5">/ 100</span>
+                        </div>
+                        <div className={`mt-2 h-2 rounded-full overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-200"}`}>
+                          <div className="h-full rounded-full transition-all duration-500" style={{
+                            width: `${selectedNode.threat_score}%`,
+                            background: selectedNode.threat_score >= 80 ? "linear-gradient(90deg, #ef4444, #dc2626)" : selectedNode.threat_score >= 60 ? "linear-gradient(90deg, #f97316, #ea580c)" : selectedNode.threat_score >= 40 ? "linear-gradient(90deg, #eab308, #ca8a04)" : selectedNode.threat_score >= 20 ? "linear-gradient(90deg, #3b82f6, #2563eb)" : "linear-gradient(90deg, #22c55e, #16a34a)"
+                          }} />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Severity Badge */}
+                    {selectedNode.severity && (
+                      <div className="flex items-center gap-2">
+                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide ${
+                          selectedNode.severity === "critical" ? "bg-red-500/20 text-red-400 ring-1 ring-red-500/30" :
+                          selectedNode.severity === "high" ? "bg-orange-500/20 text-orange-400 ring-1 ring-orange-500/30" :
+                          selectedNode.severity === "medium" ? "bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/30" :
+                          selectedNode.severity === "low" ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30" :
+                          "bg-green-500/20 text-green-400 ring-1 ring-green-500/30"
+                        }`}>{selectedNode.severity}</span>
+                      </div>
+                    )}
+
+                    {/* Full IOC */}
+                    {selectedNode.fullIoc && (
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Indicator of Compromise</p>
+                        <p className={`text-sm font-mono break-all p-2 rounded-lg ${isDark ? "text-cyan-300 bg-gray-800/80" : "text-cyan-700 bg-gray-100"}`}>{selectedNode.fullIoc}</p>
+                      </div>
+                    )}
+
+                    {/* IOC Type */}
+                    {selectedNode.ioc_type && (
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">IOC Type</p>
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${isDark ? "bg-gray-800 text-gray-300" : "bg-gray-100 text-gray-700"}`}>
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: iocTypeColors[selectedNode.ioc_type] || "#6b7280" }} />
+                          {selectedNode.ioc_type.toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Main Info */}
                 <div className="space-y-4">
@@ -1085,15 +1677,23 @@ const convertGraphToCytoscape = (graph) => {
           data.platformSlug = "snapchat";
         }
       } else if (node.type === "interest" || node.type === "activity") {
-        // Interest/activity nodes: use about icon
         data.icon = aboutIcon;
         data.brandColor = "#84cc16";
         data.platformSlug = "about";
       } else if (node.type === "timeline" || node.type === "description") {
-        // Timeline/description nodes: use description icon
         data.icon = descriptionIcon;
         data.brandColor = "#d946ef";
         data.platformSlug = "description";
+      } else if (node.type === "threat_intel_hub") {
+        data.brandColor = "#3b82f6";
+        data.platformSlug = "threat_intel";
+      } else if (node.type === "threat_intel") {
+        const score = node.threat_score || 0;
+        data.threat_score = score;
+        data.severity = node.severity;
+        data.ioc_type = node.ioc_type;
+        data.brandColor = score >= 80 ? "#ef4444" : score >= 60 ? "#f97316" : score >= 40 ? "#eab308" : score >= 20 ? "#3b82f6" : "#22c55e";
+        data.platformSlug = "threat_intel";
       }
 
       elements.push({ data });
@@ -1131,7 +1731,9 @@ const getNodeColor = (type) => {
     interest: "#84cc16",
     activity: "#6366f1",
     timeline: "#d946ef",
-    location: "#14b8a6", // Teal for location nodes
+    location: "#14b8a6",
+    threat_intel_hub: "#3b82f6",
+    threat_intel: "#ef4444",
   };
   return colors[type] || "#9ca3af";
 };

@@ -12,6 +12,7 @@ const Sidebar = () => {
     { to: "/datacollection", label: "Data Collection", icon: <><rect x="3" y="7" width="18" height="13" rx="2" ry="2" /><path d="M16 3v4" strokeLinecap="round" strokeLinejoin="round" /></> },
     { to: "/datacorrelation", label: "Data Correlation", icon: <><path d="M10 14a3 3 0 100-6 3 3 0 000 6z" strokeLinecap="round" strokeLinejoin="round" /><path d="M21 14v7" strokeLinecap="round" strokeLinejoin="round" /><path d="M3 7v7" strokeLinecap="round" strokeLinejoin="round" /></> },
     { to: "/data-preview", label: "Data Preview", icon: <><rect x="3" y="4" width="18" height="16" rx="2" ry="2" /><path d="M3 10h18" strokeLinecap="round" strokeLinejoin="round" /></> },
+    { to: "/intelligence", label: "Threat Intel", icon: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeLinecap="round" strokeLinejoin="round" /></> },
     { to: "/node-visualization", label: "Node Visualization", icon: <><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 00-14 0" strokeLinecap="round" strokeLinejoin="round" /></> },
     { to: "/reports", label: "Reports", icon: <><path d="M9 17v-6a2 2 0 012-2h6" strokeLinecap="round" strokeLinejoin="round" /><path d="M17 17v2a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h2" strokeLinecap="round" strokeLinejoin="round" /></> },
     { to: "/about", label: "About", icon: <><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 015.82 0" strokeLinecap="round" strokeLinejoin="round" /><path d="M12 17h.01" strokeLinecap="round" strokeLinejoin="round" /></> },

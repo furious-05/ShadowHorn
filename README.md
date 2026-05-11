@@ -47,9 +47,9 @@ ShadowHorn itself is completely free to use, and its core data collection and co
 </div>
 
 
-### 🌐 Data Sources
+### 🌐 OSINT Data Sources
 
-ShadowHorn currently collects OSINT from:
+ShadowHorn collects OSINT from 8 platforms:
 
 <p align="center">
   <img src="src/assets/icons/github.png" alt="GitHub" width="52" style="border-radius: 999px; margin: 4px;" />
@@ -70,6 +70,26 @@ ShadowHorn currently collects OSINT from:
 - **Snapchat** – public profile metadata.
 - **Search Engines (DuckDuckGo)** – extra links and OSINT context.
 - **BreachDirectory & Compromise Check** – breach indicators and credential exposure.
+
+### 🛡️ Threat Intelligence Sources
+
+ShadowHorn queries 6 CTI sources for IOC lookups (IPs, domains, URLs, hashes, CVEs):
+
+<p align="center">
+  <img src="src/assets/README_imgs/virustotal.png" alt="VirusTotal" width="48" style="margin: 4px;" />
+  <img src="src/assets/README_imgs/shodan.png" alt="Shodan" width="48" style="margin: 4px;" />
+  <img src="src/assets/README_imgs/abuseipdb.png" alt="AbuseIPDB" width="48" style="margin: 4px;" />
+  <img src="src/assets/README_imgs/alienvault.png" alt="AlienVault OTX" width="48" style="margin: 4px;" />
+  <img src="src/assets/README_imgs/abusech.png" alt="abuse.ch" width="48" style="margin: 4px;" />
+  <img src="src/assets/README_imgs/nvd.png" alt="NVD" width="48" style="margin: 4px;" />
+</p>
+
+- **VirusTotal** – malware detection, URL scanning, file hash reputation (60+ AV engines).
+- **Shodan** – open ports, services, vulnerabilities, geolocation for IPs and domains.
+- **AbuseIPDB** – IP abuse reports, confidence scores, ISP/geolocation data.
+- **AlienVault OTX** – threat pulses, malware associations, community-sourced intelligence.
+- **abuse.ch (ThreatFox + URLhaus + MalwareBazaar)** – malware families, malicious URLs, and file samples.
+- **NVD / CVE** – vulnerability details, CVSS scores, and affected products.
 
 ## 🚀 Features
 
@@ -102,14 +122,6 @@ A powerful suite of collectors to gather raw intelligence from a single subject 
 ![Complete Profiling](src/assets/README_imgs/CollectionComplete.png)
 ![Selective Profiling](src/assets/README_imgs/CollectionSelective.png)
 
-### 💾 Data Management
-Safely clean up stored OSINT data when an investigation is finished.
-- **Targeted cleanup**: Remove collected OSINT, correlation results, and OSINT result files for a single profile by providing an identifier (email / username / profile key).
-- **Scoped categories**: Choose which layers to wipe (MongoDB OSINT collections, correlation documents, and JSON files under `backend/osint_results`).
-- **Global reset (protected)**: Use the "Clean all data" button and type `clean all data` to perform a full environment reset; this action is irreversible, so export any reports you need first.
-
-![Data Management Screenshot](src/assets/README_imgs/DataManagement.png)
-
 ### 🧠 Data Correlation
 The brain of ShadowHorn.
 - **Analysis**: Uses OpenRouter/OpenAI models or a local FLAN model to analyze patterns in collected data.
@@ -138,25 +150,46 @@ Lightweight viewer for what has been collected and correlated.
 
 ![Data Preview Screenshot](src/assets/README_imgs/DataPreview.png)
 
+### 🛡️ Threat Intelligence (CTI)
+Full-featured IOC lookup and investigation system.
+- **Multi-Source Lookup**: Analyze IPs, domains, URLs, file hashes, and CVEs across VirusTotal, Shodan, AbuseIPDB, AlienVault OTX, abuse.ch, and NVD simultaneously.
+- **Investigation System**: Create investigations (cases) to group related IOC lookups together for organized threat tracking.
+- **Aggregated Scoring**: Unified threat score (0–100) with severity classification (Critical/High/Medium/Low/Clean).
+- **CVE Search**: Search the NVD database for vulnerabilities by keyword.
+- **Threat Feeds**: Real-time feeds from ThreatFox and MalwareBazaar.
+
+![Threat Intelligence Screenshot](src/assets/README_imgs/ThreatIntel.png)
+
 ### 🕸️ Node Visualization
-Interactive graph visualization powered by Cytoscape.
-- **Visual Links**: See connections between profiles, emails, and domains.
-- **Platform Icons**: Visual indicators for Snapchat, Twitter, GitHub, etc.
-- **Interactive Graph**: Drag, zoom, and explore the relationship network.
-- **Styling**: Custom node styles for "Interest", "Timeline", and "Identity" nodes.
+Interactive graph visualization powered by Cytoscape with dual OSINT/CTI modes.
+- **OSINT Mode**: See connections between profiles, emails, and domains with platform icons.
+- **CTI Mode**: Hierarchical threat intelligence graph showing IOC types, severity groups, and individual indicators.
+- **Investigation Scope**: Select a specific investigation or view all IOC lookups globally.
+- **Interactive Graph**: Drag, zoom, click nodes for detailed info panels.
 
 ![Node Visualization Screenshot](src/assets/README_imgs/NodeVisualization.png)
 
 ### 📝 Intelligence Reports
-Generate professional-grade reports for stakeholders.
-- **Automated Narratives**: Threat assessment and executive summaries.
-- **Export**: Download as high-quality PDF or JSON.
-- **Risk Scoring**: Automated risk level assessment based on findings.
+Generate professional-grade reports for stakeholders — both OSINT and CTI.
+- **OSINT Reports**: Automated narratives, threat assessment, and executive summaries per profile.
+- **CTI Investigation Reports**: Multi-IOC reports scoped to an investigation with severity distribution, top threats, and recommendations.
+- **CTI IOC Deep-Dive**: Single-IOC analysis with source-by-source breakdown and actionable recommendations.
+- **Export**: Download as high-quality dark-themed PDF or JSON.
+
 ![Intelligence Reports Screenshot](src/assets/README_imgs/Reports.png)
+
+### 💾 Data Management
+Full visibility and control over all stored data.
+- **Live Dashboard**: Real-time counts for OSINT records, correlations, files, TI lookups, investigations, and CVE caches.
+- **Selective Deletion**: Per-source OSINT cleanup, per-investigation CTI deletion, individual IOC removal.
+- **Profile Scoping**: Delete data for a specific profile or globally.
+- **Danger Zone**: Protected full-reset with confirmation safeguard.
+
+![Data Management Screenshot](src/assets/README_imgs/DataManagement.png)
 
 ### ⚙️ Settings
 Configure your environment.
-- **API Keys**: Manage keys for OpenRouter, Twitter, GitHub, and BreachDirectory.
+- **API Keys**: Manage keys for OpenRouter, Twitter, GitHub, BreachDirectory, VirusTotal, Shodan, AbuseIPDB, and AlienVault OTX.
 - **Theme**: Toggle between dark and light themes.
 
 ![API Settings Screenshot](src/assets/README_imgs/ApiSetting.png)
@@ -165,21 +198,40 @@ Configure your environment.
 
 ## 🔑 API Keys & Free Tiers
 
-ShadowHorn is designed to run on free API tiers where possible. Only BreachDirectory requires a paid subscription.
+ShadowHorn is designed to work entirely on **free API tiers**. Only BreachDirectory requires a paid subscription — everything else is free.
+
+### OSINT APIs
 
 | API | Cost | Required? | What It Does |
 |-----|------|-----------|-------------|
 | **GitHub** | Free | Recommended | Collect repositories, stars, followers, activity |
 | **Twitter/X** | Free tier | Optional | Read public tweets and profile metadata |
-| **OpenRouter** | Free tier | Recommended | Correlation and report narratives (6 free models) |
+| **OpenRouter** | Free tier | Recommended | AI correlation and report narratives (6 free models) |
 | **BreachDirectory** | Paid (RapidAPI) | Optional | Breach lookups and credential exposure checks |
 
-**How to get each key:**
+### Threat Intelligence APIs
+
+| API | Cost | Free Tier Limit | Requests per IOC Lookup | Required? |
+|-----|------|-----------------|------------------------|-----------|
+| **VirusTotal** | Free | 500 lookups/day, 4/min | 1–3 per IOC | Recommended |
+| **Shodan** | Free | 1 credit/month (query); scan credits | 1 per IOC | Recommended |
+| **AbuseIPDB** | Free | 1,000 checks/day | 1 per IP | Recommended |
+| **AlienVault OTX** | Free | 10,000 requests/day | 1–3 per IOC | Recommended |
+| **abuse.ch** | Free | Unlimited (public API) | 2 per IOC | No key needed |
+| **NVD / CVE** | Free | ~50 req/30s (no key) | 1 per CVE | No key needed |
+
+> **Can you use ShadowHorn completely free?** Yes. abuse.ch and NVD require **no API key at all**. The other four CTI sources offer generous free tiers. A typical investigation with 20–30 IOC lookups stays well within free limits. For casual use you will never hit a paywall.
+
+### How to get each key
 
 - **GitHub**: Sign in to GitHub → **Settings → Developer settings → Personal access tokens** → create a token (read-only scope is enough).
 - **Twitter/X**: Visit [developer.twitter.com](https://developer.twitter.com) → create a **Project & App** → copy the **Bearer Token** from Keys & Tokens tab.
 - **OpenRouter**: Go to [openrouter.ai](https://openrouter.ai) → sign in → **API Keys** → create a new key. Video walkthrough: [youtu.be/Azkyhcxc1cE](https://youtu.be/Azkyhcxc1cE?si=uhW1wIuEiNxEW_c6).
 - **BreachDirectory**: Open the BreachDirectory listing on [RapidAPI](https://rapidapi.com/rohan-patra/api/breachdirectory) → subscribe to a plan → copy your **X-RapidAPI-Key**.
+- **VirusTotal**: Go to [virustotal.com](https://www.virustotal.com) → sign up (free) → **API Key** section in your profile.
+- **Shodan**: Go to [shodan.io](https://www.shodan.io) → create a free account → **My Account → API Key**.
+- **AbuseIPDB**: Go to [abuseipdb.com](https://www.abuseipdb.com) → sign up (free) → **API** tab → create a key.
+- **AlienVault OTX**: Go to [otx.alienvault.com](https://otx.alienvault.com) → sign up (free) → **Settings → API Key**.
 
 All keys are configured from **Settings → API Key Configuration** in the UI and stored in MongoDB.
 
@@ -374,34 +426,44 @@ Turns raw OSINT into a unified intelligence profile.
 
 **Best practice:** Always verify that Data Collection has run recently for the identifier. Use Deep mode for final investigations; Fast for quick triage.
 
-### 6. Node Visualization
-Graph view of the correlated profile.
-
-- Select a profile from the dropdown.
-- **Pan/Zoom** with mouse or trackpad.
-- **Click a node** to open the Node Details panel showing platform, handle, bio, metrics, and links.
-- The Intelligence Summary panel displays the correlation narrative.
-
-### 7. Data Preview
+### 6. Data Preview
 - Inspect raw **OSINT JSON** and **correlation documents** for a chosen identifier.
 - Pick an identifier, click **Load Data** to view formatted JSON.
 - Useful for debugging collectors and verifying correlation input.
 
-### 8. Intelligence Reports
+### 7. Threat Intelligence
+IOC lookup and investigation management.
+
+- **Create an Investigation**: Click "New Investigation" to create a case (e.g., "Phishing Campaign Q2") with description and tags.
+- **Look up IOCs**: Enter an IP, domain, URL, file hash, or CVE → click **Analyze IOC**. Results come from all 6 CTI sources simultaneously.
+- **Tag to Investigation**: Select an active investigation before looking up an IOC to link it.
+- **CVE Search**: Switch to the CVE tab to search the NVD database by keyword.
+- **History**: View all past lookups, filtered by investigation if needed.
+
+### 8. Node Visualization
+Graph view with OSINT/CTI toggle.
+
+- **OSINT Mode**: Select a profile → see the correlated identity graph.
+- **CTI Mode**: View IOC graphs. Use **View Scope** dropdown to pick an investigation or see all lookups globally.
+- **Pan/Zoom** with mouse or trackpad. **Click a node** for details.
+
+### 9. Intelligence Reports
 Produces professional reports for stakeholders.
 
-- Select an identifier from the dropdown.
-- Click **Generate Report**. Backend assembles sections: Overview, Attack Surface, Breach Findings, Timeline, and Recommendations.
-- Browse sections in the UI or click **Download PDF** for a shareable report.
+- **OSINT Reports**: Select a profile → Generate Report → browse sections or download PDF.
+- **CTI Investigation Reports**: Switch to CTI tab → select an investigation → generate a multi-IOC report with severity distribution, top threats, and recommendations.
+- **CTI IOC Deep-Dive**: Select a single IOC for a detailed per-source analysis report.
+- **Export**: All reports available as dark-themed PDF or JSON.
 
-### 9. Data Management
-Controls cleanup of stored data.
+### 10. Data Management
+Full data lifecycle management.
 
-- Choose what to clean: Collected OSINT, Correlation results, or OSINT result files.
-- Enter an **Identifier** to target a specific profile, or use **Clean all data** for a full reset.
-- Targeted cleanup requires an identifier — it won't delete everything if no identifier is provided.
+- **Overview Dashboard**: See live counts for all data stores (OSINT, correlations, files, TI lookups, investigations, CVEs).
+- **Selective OSINT Cleanup**: Choose specific sources (GitHub, Twitter, etc.) and optionally scope by profile.
+- **CTI Cleanup**: Delete specific investigations (and their linked IOCs), individual IOC lookups, or CVE caches.
+- **Danger Zone**: Full environment reset with "confirm" safeguard.
 
-### 10. About
+### 11. About
 - Overview of ShadowHorn's purpose, capabilities, workflow, and tech stack.
 
 ---

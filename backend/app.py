@@ -39,6 +39,15 @@ from report_pdf import build_pdf_bytes
 from auth import register_auth_routes, require_auth, ensure_default_user
 
 # -----------------------------
+# Threat Intelligence Module
+# -----------------------------
+from threat_intel import lookup_ioc, detect_ioc_type, get_threat_feeds
+from threat_intel.nvd_cve import lookup_cve, search_cves
+from cti_report import generate_investigation_report, generate_ioc_report
+from cti_report_pdf import build_investigation_report_pdf, build_ioc_report_pdf
+from bson import ObjectId
+
+# -----------------------------
 # Apply nest_asyncio
 # -----------------------------
 nest_asyncio.apply()
@@ -169,15 +178,22 @@ def get_saved_keys():
             "github": "",
             "breachDirectory": "",
             "openRouter": "",
-            "correlationModel": ""
+            "correlationModel": "",
+            "virusTotal": "",
+            "shodan": "",
+            "abuseIPDB": "",
+            "alienVaultOTX": "",
         }
-    # Ensure defaults if some keys are missing
     return {
         "twitter": doc.get("twitter", ""),
         "github": doc.get("github", ""),
         "breachDirectory": doc.get("breachDirectory", ""),
         "openRouter": doc.get("openRouter", ""),
-        "correlationModel": doc.get("correlationModel", "")
+        "correlationModel": doc.get("correlationModel", ""),
+        "virusTotal": doc.get("virusTotal", ""),
+        "shodan": doc.get("shodan", ""),
+        "abuseIPDB": doc.get("abuseIPDB", ""),
+        "alienVaultOTX": doc.get("alienVaultOTX", ""),
     }
 
 
@@ -698,7 +714,11 @@ def api_status():
         "twitter": bool(keys.get("twitter")),
         "github": bool(keys.get("github")),
         "breachDirectory": bool(keys.get("breachDirectory")),
-        "openRouter": bool(keys.get("openRouter"))
+        "openRouter": bool(keys.get("openRouter")),
+        "virusTotal": bool(keys.get("virusTotal")),
+        "shodan": bool(keys.get("shodan")),
+        "abuseIPDB": bool(keys.get("abuseIPDB")),
+        "alienVaultOTX": bool(keys.get("alienVaultOTX")),
     }
     # MongoDB ping
     mongo_ok = False
@@ -939,7 +959,11 @@ def save_keys():
             "github": data.get("github", ""),
             "breachDirectory": data.get("breachDirectory", ""),
             "openRouter": data.get("openRouter", ""),
-            "correlationModel": data.get("correlationModel", "")
+            "correlationModel": data.get("correlationModel", ""),
+            "virusTotal": data.get("virusTotal", ""),
+            "shodan": data.get("shodan", ""),
+            "abuseIPDB": data.get("abuseIPDB", ""),
+            "alienVaultOTX": data.get("alienVaultOTX", ""),
         }},
         upsert=True
     )
@@ -1154,17 +1178,428 @@ def api_report_comprehensive():
       return jsonify({"error": str(e)}), 500
 
 
+# =============================================================================
+# Threat Intelligence Routes
+# =============================================================================
+
+ti_collection = data_db["threat_intel"]
+cve_collection = data_db["cve_lookups"]
+inv_collection = data_db["investigations"]
+
+
+# =============================================================================
+# Investigation CRUD
+# =============================================================================
+
+@app.route("/api/investigations", methods=["POST"])
+@require_auth
+def create_investigation():
+    """Create a new CTI investigation/case."""
+    try:
+        payload = request.get_json() or {}
+        name = (payload.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "Investigation name is required"}), 400
+
+        doc = {
+            "name": name,
+            "description": (payload.get("description") or "").strip(),
+            "tags": payload.get("tags", []),
+            "status": "active",
+            "ioc_count": 0,
+            "created_at": datetime.datetime.utcnow(),
+            "updated_at": datetime.datetime.utcnow(),
+        }
+        result = inv_collection.insert_one(doc)
+        doc["_id"] = str(result.inserted_id)
+        doc["id"] = doc.pop("_id")
+        return jsonify(doc), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/investigations", methods=["GET"])
+@require_auth
+def list_investigations():
+    """List all investigations, newest first."""
+    try:
+        cursor = inv_collection.find().sort("updated_at", -1)
+        investigations = []
+        for doc in cursor:
+            doc["id"] = str(doc.pop("_id"))
+            investigations.append(doc)
+        return jsonify({"investigations": investigations}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/investigations/<inv_id>", methods=["GET"])
+@require_auth
+def get_investigation(inv_id):
+    """Get investigation details + its IOCs."""
+    try:
+        inv = inv_collection.find_one({"_id": ObjectId(inv_id)})
+        if not inv:
+            return jsonify({"error": "Investigation not found"}), 404
+        inv["id"] = str(inv.pop("_id"))
+        iocs = list(ti_collection.find(
+            {"investigation_id": inv_id},
+            {"_id": 0, "ioc": 1, "ioc_type": 1, "threat_score": 1, "looked_up_at": 1}
+        ).sort("looked_up_at", -1))
+        return jsonify({"investigation": inv, "iocs": iocs}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/investigations/<inv_id>", methods=["DELETE"])
+@require_auth
+def delete_investigation(inv_id):
+    """Delete an investigation. Unlinks IOCs (does not delete TI data)."""
+    try:
+        inv_collection.delete_one({"_id": ObjectId(inv_id)})
+        ti_collection.update_many(
+            {"investigation_id": inv_id},
+            {"$unset": {"investigation_id": ""}}
+        )
+        return jsonify({"status": "deleted"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/investigations/<inv_id>", methods=["PATCH"])
+@require_auth
+def update_investigation(inv_id):
+    """Update investigation name/description/status/tags."""
+    try:
+        payload = request.get_json() or {}
+        update = {"updated_at": datetime.datetime.utcnow()}
+        for field in ("name", "description", "status", "tags"):
+            if field in payload:
+                update[field] = payload[field]
+        inv_collection.update_one({"_id": ObjectId(inv_id)}, {"$set": update})
+        return jsonify({"status": "updated"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/threat-intel/lookup", methods=["POST"])
+@require_auth
+def ti_lookup():
+    """Universal IOC lookup. Auto-detects type and queries all relevant TI sources.
+
+    Expects JSON: { "ioc": "8.8.8.8", "investigation_id"?: "abc123" }
+    Optional: { "force": true } to skip cache.
+    """
+    try:
+        payload = request.get_json() or {}
+        ioc_value = (payload.get("ioc") or "").strip()
+        force = bool(payload.get("force", False))
+        investigation_id = (payload.get("investigation_id") or "").strip() or None
+
+        if not ioc_value:
+            return jsonify({"error": "Missing 'ioc' in request body"}), 400
+
+        ioc_type = detect_ioc_type(ioc_value)
+        if ioc_type == "unknown":
+            return jsonify({
+                "error": "Unrecognized IOC type. Supported: IP address, domain, URL, file hash (MD5/SHA1/SHA256), CVE ID."
+            }), 400
+
+        # Check cache unless force refresh
+        if not force:
+            cached = ti_collection.find_one({"ioc": ioc_value})
+            if cached:
+                cached.pop("_id", None)
+                # If tagging to an investigation, update the link
+                if investigation_id and cached.get("investigation_id") != investigation_id:
+                    ti_collection.update_one(
+                        {"ioc": ioc_value},
+                        {"$set": {"investigation_id": investigation_id}}
+                    )
+                    inv_collection.update_one(
+                        {"_id": ObjectId(investigation_id)},
+                        {"$inc": {"ioc_count": 1}, "$set": {"updated_at": datetime.datetime.utcnow()}}
+                    )
+                    cached["investigation_id"] = investigation_id
+                cached["cached"] = True
+                return jsonify(cached), 200
+
+        keys = get_saved_keys()
+        result = lookup_ioc(ioc_value, keys)
+
+        # Store in MongoDB
+        doc = {
+            "ioc": ioc_value,
+            "ioc_type": ioc_type,
+            "sources": result.get("sources", {}),
+            "threat_score": result.get("threat_score", {}),
+            "looked_up_at": datetime.datetime.utcnow(),
+        }
+        if investigation_id:
+            doc["investigation_id"] = investigation_id
+
+        ti_collection.update_one({"ioc": ioc_value}, {"$set": doc}, upsert=True)
+
+        # Update investigation ioc_count
+        if investigation_id:
+            inv_collection.update_one(
+                {"_id": ObjectId(investigation_id)},
+                {"$inc": {"ioc_count": 1}, "$set": {"updated_at": datetime.datetime.utcnow()}}
+            )
+
+        result["looked_up_at"] = doc["looked_up_at"]
+        result["cached"] = False
+        if investigation_id:
+            result["investigation_id"] = investigation_id
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/threat-intel/result/<path:ioc_id>", methods=["GET"])
+@require_auth
+def ti_get_result(ioc_id):
+    """Retrieve a stored TI lookup result."""
+    try:
+        doc = ti_collection.find_one({"ioc": ioc_id})
+        if not doc:
+            return jsonify({"error": "No TI data found for this IOC"}), 404
+        doc.pop("_id", None)
+        return jsonify(doc), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/threat-intel/history", methods=["GET"])
+@require_auth
+def ti_history():
+    """List past TI lookups with scores, ordered by most recent.
+    Optional query param: investigation_id to filter by investigation.
+    """
+    try:
+        limit = int(request.args.get("limit", 50))
+        investigation_id = request.args.get("investigation_id", "").strip()
+        query = {}
+        if investigation_id:
+            query["investigation_id"] = investigation_id
+        cursor = ti_collection.find(
+            query,
+            {"_id": 0, "ioc": 1, "ioc_type": 1, "threat_score": 1, "looked_up_at": 1, "investigation_id": 1}
+        ).sort("looked_up_at", -1).limit(limit)
+
+        history = list(cursor)
+        return jsonify({"history": history, "total": len(history)}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/threat-intel/feeds", methods=["GET"])
+@require_auth
+def ti_feeds():
+    """Fetch recent threat feed data from abuse.ch and OTX."""
+    try:
+        limit = int(request.args.get("limit", 20))
+        keys = get_saved_keys()
+        feeds = get_threat_feeds(keys, limit=limit)
+        return jsonify(feeds), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/threat-intel/cve/<cve_id>", methods=["GET"])
+@require_auth
+def ti_cve_lookup(cve_id):
+    """Look up a specific CVE by ID."""
+    try:
+        cached = cve_collection.find_one({"cve_id": cve_id.upper()})
+        if cached:
+            cached.pop("_id", None)
+            return jsonify(cached), 200
+
+        result = lookup_cve(cve_id)
+        if result.get("found"):
+            result["looked_up_at"] = datetime.datetime.utcnow()
+            cve_collection.update_one(
+                {"cve_id": cve_id.upper()}, {"$set": result}, upsert=True
+            )
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/threat-intel/cve/search", methods=["GET"])
+@require_auth
+def ti_cve_search():
+    """Search CVEs by keyword."""
+    try:
+        keyword = request.args.get("q", "").strip()
+        limit = int(request.args.get("limit", 20))
+        if not keyword:
+            return jsonify({"error": "Provide 'q' query parameter"}), 400
+
+        result = search_cves(keyword, limit=limit)
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/threat-intel/dashboard", methods=["GET"])
+@require_auth
+def ti_dashboard():
+    """Summary stats for the dashboard TI card."""
+    try:
+        total_lookups = ti_collection.count_documents({})
+        critical_count = ti_collection.count_documents({"threat_score.severity": "critical"})
+        high_count = ti_collection.count_documents({"threat_score.severity": "high"})
+
+        recent = list(ti_collection.find(
+            {},
+            {"_id": 0, "ioc": 1, "ioc_type": 1, "threat_score": 1, "looked_up_at": 1}
+        ).sort("looked_up_at", -1).limit(5))
+
+        last_lookup = ti_collection.find_one(sort=[("looked_up_at", -1)])
+        last_at = last_lookup.get("looked_up_at") if last_lookup else None
+
+        return jsonify({
+            "total_lookups": total_lookups,
+            "critical_count": critical_count,
+            "high_count": high_count,
+            "recent": recent,
+            "last_lookup_at": last_at,
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# =============================================================================
+# CTI Report Generation
+# =============================================================================
+
+@app.route("/api/report/cti/investigation", methods=["POST"])
+@require_auth
+def cti_investigation_report():
+    """Generate a CTI investigation report for all IOCs in an investigation."""
+    try:
+        payload = request.get_json() or {}
+        investigation_id = (payload.get("investigation_id") or "").strip()
+        if not investigation_id:
+            return jsonify({"error": "Missing investigation_id"}), 400
+        result = generate_investigation_report(investigation_id, MONGO_URI)
+        if result.get("error"):
+            return jsonify(result), 400
+        return jsonify({"status": "success", "report": result}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/report/cti/investigation/pdf", methods=["POST"])
+@require_auth
+def cti_investigation_report_pdf():
+    """Generate PDF for a CTI investigation report."""
+    try:
+        payload = request.get_json() or {}
+        report = payload.get("report")
+        if not report:
+            return jsonify({"error": "Missing report data"}), 400
+        pdf_bytes = build_investigation_report_pdf(report)
+        inv_name = report.get("meta", {}).get("investigation_name", "investigation")
+        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', inv_name)[:40]
+        filename = f"CTI_{safe_name}_{datetime.datetime.utcnow().strftime('%Y%m%d')}.pdf"
+        response = make_response(pdf_bytes)
+        response.headers["Content-Type"] = "application/pdf"
+        response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/report/cti/ioc", methods=["POST"])
+@require_auth
+def cti_ioc_report():
+    """Generate a deep-dive report for a single IOC."""
+    try:
+        payload = request.get_json() or {}
+        ioc_value = (payload.get("ioc") or "").strip()
+        if not ioc_value:
+            return jsonify({"error": "Missing 'ioc' in request body"}), 400
+        result = generate_ioc_report(ioc_value, MONGO_URI)
+        if result.get("error"):
+            return jsonify(result), 400
+        return jsonify({"status": "success", "report": result}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/report/cti/ioc/pdf", methods=["POST"])
+@require_auth
+def cti_ioc_report_pdf():
+    """Generate PDF for a single IOC deep-dive report."""
+    try:
+        payload = request.get_json() or {}
+        report = payload.get("report")
+        if not report:
+            return jsonify({"error": "Missing report data"}), 400
+        pdf_bytes = build_ioc_report_pdf(report)
+        ioc = report.get("meta", {}).get("ioc", "ioc")
+        safe_ioc = re.sub(r'[^a-zA-Z0-9_.-]', '_', ioc)[:40]
+        filename = f"IOC_{safe_ioc}_{datetime.datetime.utcnow().strftime('%Y%m%d')}.pdf"
+        response = make_response(pdf_bytes)
+        response.headers["Content-Type"] = "application/pdf"
+        response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/data-stats", methods=["GET"])
+@require_auth
+def data_stats():
+    """Return document counts across all data stores for the data-management UI."""
+    try:
+        stats = {"osint": {}, "correlations": 0, "files": 0,
+                 "threat_intel": 0, "investigations": 0, "cve_lookups": 0}
+
+        for name, coll in collections.items():
+            stats["osint"][name] = coll.estimated_document_count()
+
+        try:
+            corr_db = client.get_database("data_correlation")
+            stats["correlations"] = corr_db.get_collection("correlations").estimated_document_count()
+        except Exception:
+            pass
+
+        try:
+            if OSINT_RESULTS_DIR.exists():
+                stats["files"] = len(list(OSINT_RESULTS_DIR.glob("*.json")))
+        except Exception:
+            pass
+
+        stats["threat_intel"] = ti_collection.estimated_document_count()
+        stats["investigations"] = inv_collection.estimated_document_count()
+        stats["cve_lookups"] = cve_collection.estimated_document_count()
+
+        return jsonify(stats), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/cleanup", methods=["POST"])
 @require_auth
 def api_cleanup():
-    """Clean collected OSINT data and/or correlation data.
+    """Clean collected data. Supports both OSINT and CTI data.
 
     Expected JSON body:
     {
-        "collections": true|false,   # clean OSINT collections in data_db
-        "correlations": true|false, # clean correlation results
-        "files": true|false,        # clean JSON files in osint_results
-        "identifier": "..."        # optional, limit cleanup to this identifier
+        "collections": true|false,
+        "correlations": true|false,
+        "files": true|false,
+        "threat_intel": true|false,
+        "investigations": true|false,
+        "cve_lookups": true|false,
+        "identifier": "...",
+        "investigation_ids": ["id1", "id2"],
+        "ioc_values": ["1.2.3.4", "evil.com"],
+        "confirm_all": true|false
     }
     """
     try:
@@ -1172,20 +1607,27 @@ def api_cleanup():
         clear_collections = bool(payload.get("collections"))
         clear_correlations = bool(payload.get("correlations"))
         clear_files = bool(payload.get("files"))
+        clear_ti = bool(payload.get("threat_intel"))
+        clear_inv = bool(payload.get("investigations"))
+        clear_cve = bool(payload.get("cve_lookups"))
         identifier = sanitize_identifier(payload.get("identifier") or "")
+        investigation_ids = payload.get("investigation_ids") or []
+        ioc_values = payload.get("ioc_values") or []
 
-        if not (clear_collections or clear_correlations or clear_files):
+        any_selected = (clear_collections or clear_correlations or clear_files
+                        or clear_ti or clear_inv or clear_cve)
+        has_scope = (identifier or investigation_ids or ioc_values
+                     or payload.get("confirm_all"))
+
+        if not any_selected:
             return jsonify({"error": "Select at least one data type to clean."}), 400
 
-        # Require explicit 'confirm_all' flag to delete without an identifier.
-        # This prevents accidental mass deletion when the identifier field is
-        # left blank on the targeted-cleanup path.
-        if not identifier and not payload.get("confirm_all"):
-            return jsonify({"error": "Provide an identifier for targeted cleanup, or use the global cleanup action."}), 400
+        if not has_scope:
+            return jsonify({"error": "Provide a scope (identifier, investigation IDs, IOC values) or use confirm_all for global cleanup."}), 400
 
-        result = {"collections": {}, "correlations": 0, "files_removed": 0}
+        result = {"collections": {}, "correlations": 0, "files_removed": 0,
+                  "threat_intel": 0, "investigations": 0, "cve_lookups": 0}
 
-        # Clean Mongo collections in data_db
         if clear_collections:
             for name, coll in collections.items():
                 try:
@@ -1197,7 +1639,6 @@ def api_cleanup():
                 except Exception as e:
                     result["collections"][name] = f"error: {e}"
 
-        # Clean correlation results
         if clear_correlations:
             try:
                 corr_db = client.get_database("data_correlation")
@@ -1210,7 +1651,6 @@ def api_cleanup():
             except Exception as e:
                 result["correlations"] = f"error: {e}"
 
-        # Clean OSINT result files on disk
         if clear_files:
             try:
                 count = 0
@@ -1225,6 +1665,37 @@ def api_cleanup():
                 result["files_removed"] = count
             except Exception as e:
                 result["files_removed"] = f"error: {e}"
+
+        if clear_ti:
+            try:
+                if ioc_values:
+                    res = ti_collection.delete_many({"ioc": {"$in": ioc_values}})
+                elif investigation_ids:
+                    res = ti_collection.delete_many({"investigation_id": {"$in": investigation_ids}})
+                else:
+                    res = ti_collection.delete_many({})
+                result["threat_intel"] = res.deleted_count
+            except Exception as e:
+                result["threat_intel"] = f"error: {e}"
+
+        if clear_inv:
+            try:
+                if investigation_ids:
+                    from bson import ObjectId as _ObjId
+                    obj_ids = [_ObjId(i) for i in investigation_ids]
+                    res = inv_collection.delete_many({"_id": {"$in": obj_ids}})
+                else:
+                    res = inv_collection.delete_many({})
+                result["investigations"] = res.deleted_count
+            except Exception as e:
+                result["investigations"] = f"error: {e}"
+
+        if clear_cve:
+            try:
+                res = cve_collection.delete_many({})
+                result["cve_lookups"] = res.deleted_count
+            except Exception as e:
+                result["cve_lookups"] = f"error: {e}"
 
         return jsonify({"status": "success", "details": result}), 200
     except Exception as e:

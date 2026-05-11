@@ -12,6 +12,10 @@ const Settings = () => {
     github: "",
     breachDirectory: "",
     openRouter: "",
+    virusTotal: "",
+    shodan: "",
+    abuseIPDB: "",
+    alienVaultOTX: "",
   });
 
   const [isLocked, setIsLocked] = useState(false);
@@ -104,7 +108,10 @@ const Settings = () => {
             All collectors use free API tiers where possible: Twitter, GitHub and OpenRouter can be used for free; only the BreachDirectory key requires a paid plan from the provider.
           </p>
 
-          {/* Inputs */}
+          {/* OSINT API Keys */}
+          <h3 className={`text-sm font-semibold mb-3 uppercase tracking-wider ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+            OSINT Collectors
+          </h3>
           {["twitter", "github", "breachDirectory", "openRouter"].map((key) => (
             <div className="mb-5" key={key}>
               <label className={`text-sm ${isDark ? "text-gray-400" : "text-gray-600"}`}>{key} API Key</label>
@@ -158,6 +165,54 @@ const Settings = () => {
             >
               ➜ OpenRouter API key walkthrough (YouTube)
             </a>
+          </div>
+
+          {/* Threat Intelligence API Keys */}
+          <div className={`mt-6 pt-6 border-t ${isDark ? "border-white/10" : "border-gray-200"}`}>
+            <h3 className={`text-sm font-semibold mb-1 uppercase tracking-wider ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+              Threat Intelligence
+            </h3>
+            <p className={`text-xs mb-4 ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+              All TI sources offer free API tiers. ThreatFox, URLhaus, MalwareBazaar, and NVD require no key at all.
+            </p>
+            {[
+              { key: "virusTotal", label: "VirusTotal", placeholder: "Free: 500 lookups/day" },
+              { key: "shodan", label: "Shodan", placeholder: "Free: 100 queries/month" },
+              { key: "abuseIPDB", label: "AbuseIPDB", placeholder: "Free: 1000 checks/day" },
+              { key: "alienVaultOTX", label: "AlienVault OTX", placeholder: "Free: unlimited" },
+            ].map(({ key, label, placeholder }) => (
+              <div className="mb-5" key={key}>
+                <label className={`text-sm ${isDark ? "text-gray-400" : "text-gray-600"}`}>{label} API Key</label>
+                <input
+                  type="text"
+                  name={key}
+                  value={apiKeys[key]}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  placeholder={placeholder}
+                  className={inputClass(isLocked)}
+                />
+              </div>
+            ))}
+
+            <div className="flex flex-col gap-1 mb-2">
+              <a href="https://www.virustotal.com/gui/join-us" target="_blank" rel="noopener noreferrer"
+                className={isDark ? "text-blue-400 text-sm underline hover:text-blue-300 transition" : "text-blue-600 text-sm underline hover:text-blue-500 transition"}>
+                ➜ Get VirusTotal API Key (free)
+              </a>
+              <a href="https://account.shodan.io/register" target="_blank" rel="noopener noreferrer"
+                className={isDark ? "text-blue-400 text-sm underline hover:text-blue-300 transition" : "text-blue-600 text-sm underline hover:text-blue-500 transition"}>
+                ➜ Get Shodan API Key (free)
+              </a>
+              <a href="https://www.abuseipdb.com/pricing" target="_blank" rel="noopener noreferrer"
+                className={isDark ? "text-blue-400 text-sm underline hover:text-blue-300 transition" : "text-blue-600 text-sm underline hover:text-blue-500 transition"}>
+                ➜ Get AbuseIPDB API Key (free)
+              </a>
+              <a href="https://otx.alienvault.com/api" target="_blank" rel="noopener noreferrer"
+                className={isDark ? "text-blue-400 text-sm underline hover:text-blue-300 transition" : "text-blue-600 text-sm underline hover:text-blue-500 transition"}>
+                ➜ Get AlienVault OTX API Key (free)
+              </a>
+            </div>
           </div>
 
           {/* Buttons */}

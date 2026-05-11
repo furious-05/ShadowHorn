@@ -735,10 +735,10 @@ const DataCorrelation = () => {
         <div className={`mt-auto pt-4 flex justify-between items-center border-t ${isDark ? "border-white/5" : "border-gray-200"}`}>
           <button onClick={() => navigate('/datacollection')} className={`px-4 py-2 rounded-full font-medium shadow ${
             isDark ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-800"
-          }`}>Back</button>
-          <button onClick={() => navigate('/node-visualization')} className={`px-5 py-3 rounded-full font-semibold shadow-lg ${
-            isDark ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-800"
-          }`}>Next</button>
+          }`}>&larr; Data Collection</button>
+          <button onClick={() => navigate('/data-preview')} className={`px-5 py-3 rounded-full font-semibold shadow-lg ${
+            isDark ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-blue-600 hover:bg-blue-500 text-white"
+          }`}>Data Preview &rarr;</button>
         </div>
       </div>
     </div>
